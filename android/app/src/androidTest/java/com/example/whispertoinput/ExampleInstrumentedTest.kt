@@ -100,8 +100,12 @@ class ExampleInstrumentedTest {
         bitmap.recycle()
         // AGP uninstalls the tested APK at teardown, deleting its external-files directory.
         // Copy the dummy-data screenshots out using the test runner's shell identity first.
-        val result = shell("mkdir -p /sdcard/whisper-verification && cp '${target.absolutePath}' '/sdcard/whisper-verification/$name.png' && printf copied")
-        assertEquals("copied", result)
+        // UiAutomation runs a process directly; it does not interpret shell operators or quotes.
+        // These fixed test-only paths contain no whitespace and carry only dummy data.
+        val exported = "/sdcard/whisper-verification/$name.png"
+        shell("mkdir -p /sdcard/whisper-verification")
+        shell("cp ${target.absolutePath} $exported")
+        assertEquals("Screenshot copy failed", exported, shell("ls $exported").trim())
     }
 
     @Test fun actualInputMethodStartsAndBlocksPasswordField() {
@@ -114,7 +118,10 @@ class ExampleInstrumentedTest {
         val previous = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD)
         val ime = "${context.packageName}/com.example.whispertoinput.WhisperInputService"
         try {
-            shell("ime enable $ime && ime set $ime")
+            shell("ime enable $ime")
+            shell("ime set $ime")
+            assertEquals("Test keyboard was not selected", ime,
+                android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD))
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 val deadline = android.os.SystemClock.elapsedRealtime() + 10000
                 var ready = false
