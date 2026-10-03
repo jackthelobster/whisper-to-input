@@ -1,0 +1,101 @@
+name: Android verification
+
+on:
+  push:
+    branches: [master, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Restore release signing key on trusted push only
+        if: github.event_name != 'pull_request' && github.repository == 'jackthelobster/whisper-to-input'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/whisper-signing.p12"
+          chmod 600 "$RUNNER_TEMP/whisper-signing.p12"
+          printf 'ANDROID_KEYSTORE_PATH=%s\n' "$RUNNER_TEMP/whisper-signing.p12" >> "$GITHUB_ENV"
+          printf 'ANDROID_KEYSTORE_PASSWORD=%s\n' "$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+      - name: Unit tests, lint and release/debug builds
+        working-directory: android
+        run: ./gradlew --no-daemon testDebugUnitTest lintRelease assembleRelease assembleDebug assembleDebugAndroidTest
+      - name: Verify APK signature and permissions
+        if: github.event_name != 'pull_request'
+        working-directory: android
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk | tee app/build/outputs/apk/release/signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk | tee app/build/outputs/apk/release/badging.txt
+          sha256sum app/build/outputs/apk/release/app-release.apk > app/build/outputs/apk/release/SHA256SUMS
+      - name: Remove runner signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/whisper-signing.p12"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-build-and-reports
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            android/app/build/outputs/apk/
+            android/app/build/reports/
+            android/app/build/test-results/
+
+  android12:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Allow hardware emulator acceleration
+        run: |
+          sudo chmod 666 /dev/kvm
+      - name: Android 12 device tests and screenshots
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 31
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb shell wm size 1080x2280
+            adb shell wm density 480
+            cd android && ./gradlew --no-daemon connectedDebugAndroidTest
+            mkdir -p app/build/screenshots
+            adb pull /sdcard/Android/data/com.jackthelobster.whispertoinput/files/screenshots app/build/screenshots
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android12-device-verification
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+            android/app/build/screenshots/

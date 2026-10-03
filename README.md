@@ -1,4 +1,44 @@
-# Whisper To Input
+# Whisper To Input — Andrew’s secure dictation fork
+
+This fork targets a Samsung Galaxy S10e running Android 12. It provides a native Material 3 day/night settings screen and a compact voice-input keyboard, with security and lifecycle fixes.
+
+## Your distil-whisper configuration
+
+| Setting | Value |
+|---|---|
+| Endpoint | http://gx10:8020/v1/audio/transcriptions |
+| Model | distil-whisper/distil-large-v3 |
+| Language | en |
+| API key | Leave blank for the current server |
+| Allow local HTTP | Enabled for gx10 only |
+| Auto-record | Off by default |
+
+Only English is supported by this particular distil-whisper server. Other OpenAI-compatible transcription servers can be configured using HTTPS. This fork focuses on that multipart API; the upstream ASR-specific route, NIM OGG mode and Chinese conversion settings are not retained.
+
+## Install and use this fork
+
+1. Install the fork’s signed APK, not the upstream release linked further below. The fork uses a separate application ID, com.jackthelobster.whispertoinput, so it can coexist with the original.
+2. Open the app and grant microphone permission using its setup button. No notification or storage permission is needed.
+3. Enable the keyboard using the app’s Enable button, then use Choose keyboard. Samsung also exposes this under Settings → General management → Keyboard list and default.
+4. Keep the pre-filled settings above, use Test connection, and save any changes. The S10e must be able to resolve gx10 and reach port 8020 through your local network or VPN.
+5. In an ordinary text field, switch to Whisper Input. Tap the microphone, speak English, then tap Stop to transcribe and insert text. Cancel discards audio. Failed uploads can be retried only while the same field remains active. Switching fields or hiding the keyboard cancels work and deletes the recording.
+
+HTTP itself is unencrypted. The exception is restricted to exact gx10, requires the local-HTTP switch, and never accepts an API key. Use only over a trusted private network or encrypted VPN; use HTTPS for other servers. Password/private fields disable dictation. A recording is limited to two minutes.
+
+## Verification and source
+
+- [Security and bug review](docs/SECURITY_REVIEW.md).
+- [Automated Android build and verification](../../actions).
+- Unit tests cover endpoint policy, multipart/parsing, HTTP cancellation/errors, credential migration, audio ownership and editor policy.
+- Android 12 instrumentation covers permission/network policy, actual Keystore round-trip, UI rendering and protected-field microphone controls.
+- GitHub Actions builds a non-debug release APK with a persistent private signing key and verifies its signature. Signed APKs and reports are provided as artifacts; the signing key is never committed.
+- The GPLv3 license and original contributor credits are preserved.
+
+The following is the original upstream documentation, retained for history. Its screenshots, release downloads, backend options, permission requirements and keyboard behavior do not describe this fork.
+
+---
+
+# Original upstream documentation
 
 Whisper To Input, also known by its Mandarin name 輕聲細語輸入法, is an Android keyboard that performs speech-to-text (STT/ASR) with OpenAI Whisper and input the recognized text; Supports English, Chinese, Japanese, etc. and even mixed languages and Taiwanese.
 

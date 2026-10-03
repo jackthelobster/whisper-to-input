@@ -20,33 +20,24 @@
 package com.example.whispertoinput
 
 import android.content.Context
-import android.util.Log
-import androidx.datastore.preferences.core.Preferences
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import okhttp3.Headers
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.asRequestBody
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
-import com.github.liuyueyi.quick.transfer.ChineseUtils
+import kotlin.coroutines.coroutineContext
 
 class WhisperTranscriber {
-    private data class Config(
-        val endpoint: String,
-        val languageCode: String,
-        val speechToTextBackend: String,
-        val apiKey: String,
-        val model: String,
-        val postprocessing: String,
-        val addTrailingSpace: Boolean
-    )
-
-    private val TAG = "WhisperTranscriber"
+    private val supervisor = SupervisorJob()
+    private val scope = CoroutineScope(supervisor + Dispatchers.Main)
+    private val client = TranscriptionClient()
+    private val lifecycleLock = Any()
     private var currentTranscriptionJob: Job? = null
 
     fun startAsync(
@@ -57,193 +48,63 @@ class WhisperTranscriber {
         callback: (String?) -> Unit,
         exceptionCallback: (String) -> Unit
     ) {
-        suspend fun makeWhisperRequest(): String {
-            // Retrieve configs
-            val (endpoint, languageCode, speechToTextBackend, apiKey, model, postprocessing, addTrailingSpace) = context.dataStore.data.map { preferences: Preferences ->
-                Config(
-                    preferences[ENDPOINT] ?: "",
-                    preferences[LANGUAGE_CODE] ?: "",
-                    preferences[SPEECH_TO_TEXT_BACKEND] ?: context.getString(R.string.settings_option_openai_api),
-                    preferences[API_KEY] ?: "",
-                    preferences[MODEL] ?: "",
-                    preferences[POSTPROCESSING] ?: context.getString(R.string.settings_option_no_conversion),
-                    preferences[ADD_TRAILING_SPACE] ?: false
-                )
-            }.first()
-
-            // Foolproof message
-            if (endpoint == "") {
-                throw Exception(context.getString(R.string.error_endpoint_unset))
-            }
-
-            // Make request
-            val client = OkHttpClient()
-            val request = buildWhisperRequest(
-                context,
-                filename,
-                mediaType,
-                speechToTextBackend,
-                endpoint,
-                languageCode,
-                apiKey,
-                model
-            )
-            val response = client.newCall(request).execute()
-
-            // If request is not successful, or response code is weird
-            if (!response.isSuccessful || response.code / 100 != 2) {
-                throw Exception(response.body!!.string().replace('\n', ' '))
-            }
-
-            var rawText = response.body!!.string().trim()
-            
-            // For NVIDIA NIM, remove quotes if they wrap the text
-            // Not sure if this is a bug or a feature...
-            if (speechToTextBackend == context.getString(R.string.settings_option_nvidia_nim) && 
-                rawText.startsWith("\"") && rawText.endsWith("\"")) {
-                rawText = rawText.substring(1, rawText.length - 1).trim()
-            }
-            
-            val processedText = when (postprocessing) {
-                context.getString(R.string.settings_option_to_simplified) -> ChineseUtils.tw2s(rawText)
-                context.getString(R.string.settings_option_to_traditional) -> ChineseUtils.s2tw(rawText)
-                else -> rawText // No conversion
-            }
-
-            if (attachToEnd == "") {
-                return processedText + if (addTrailingSpace) " " else ""
-            } else {
-                // Only used for space key and enter key.
-                return processedText + attachToEnd
-            }
-        }
-
-        // Create a cancellable job in the main thread (for UI updating)
-        val job = CoroutineScope(Dispatchers.Main).launch {
-
-            // Within the job, make a suspend call at the I/O thread
-            // It suspends before result is obtained.
-            // Returns (transcribed string, exception message)
-            val (transcribedText, exceptionMessage) = withContext(Dispatchers.IO) {
-                try {
-                    // Perform transcription here
-                    val response = makeWhisperRequest()
-                    // Clean up unused audio file after transcription
-                    // Ref: https://developer.android.com/reference/android/media/MediaRecorder#setOutputFile(java.io.File)
-                    File(filename).delete()
-                    return@withContext Pair(response, null)
+        val application = context.applicationContext
+        val audio = File(filename)
+        synchronized(lifecycleLock) {
+            if (!supervisor.isActive) return
+            currentTranscriptionJob?.cancel()
+            val lease = RecordingLease.acquire(audio)
+            val job = scope.launch(start = CoroutineStart.LAZY) {
+                val result = try {
+                    withContext(Dispatchers.IO) {
+                        val settings = SettingsRepository(application).load()
+                        val text = client.transcribe(settings, audio, mediaType)
+                        coroutineContext.ensureActive()
+                        val operation = coroutineContext[Job]!!
+                        lease.deleteAfterSuccess { operation.isActive }
+                        text + when {
+                            attachToEnd.isNotEmpty() -> attachToEnd
+                            settings.trailingSpace -> " "
+                            else -> ""
+                        }
+                    }
                 } catch (e: CancellationException) {
-                    // Task was canceled
-                    return@withContext Pair(null, null)
+                    // Propagate cancellation: it cancels the actual OkHttp Call and emits no callbacks.
+                    throw e
                 } catch (e: Exception) {
-                    return@withContext Pair(null, e.message)
+                    coroutineContext.ensureActive()
+                    val message = if (e is TranscriptionException) e.message!!
+                        else "Transcription failed. Check your settings and try again."
+                    callback(null)
+                    coroutineContext.ensureActive()
+                    exceptionCallback(message)
+                    return@launch
+                }
+                coroutineContext.ensureActive()
+                callback(result)
+            }
+            currentTranscriptionJob = job
+            job.invokeOnCompletion {
+                lease.release()
+                synchronized(lifecycleLock) {
+                    if (currentTranscriptionJob === job) currentTranscriptionJob = null
                 }
             }
-
-            // This callback is within the main thread.
-            callback.invoke(transcribedText)
-
-            // If exception message is not null
-            if (!exceptionMessage.isNullOrEmpty()) {
-                Log.e(TAG, exceptionMessage)
-                exceptionCallback(exceptionMessage)
-            }
+            job.start()
         }
-
-        registerTranscriptionJob(job)
     }
 
-    fun stop() {
-        registerTranscriptionJob(null)
-    }
-
-    private fun registerTranscriptionJob(job: Job?) {
+    fun stop() = synchronized(lifecycleLock) {
         currentTranscriptionJob?.cancel()
-        currentTranscriptionJob = job
+        currentTranscriptionJob = null
     }
 
-    private fun buildWhisperRequest(
-        context: Context,
-        filename: String,
-        mediaType: String,
-        speechToTextBackend: String,
-        endpoint: String,
-        languageCode: String,
-        apiKey: String,
-        model: String
-    ): Request {
-        // Please refer to the following for the endpoint/payload definitions:
-        // OpenAI API:
-        // - https://platform.openai.com/docs/api-reference/audio/createTranscription
-        // - https://platform.openai.com/docs/api-reference/making-requests
-        // Whisper ASR WebService:
-        // - https://ahmetoner.com/whisper-asr-webservice/run/#usage
-        // NVIDIA NIM:
-        // - No public documentation for HTTP-style requests.
-        // - Source code at `/opt/nim/inference.py` in docker container `nvcr.io/nim/nvidia/riva-asr:1.3.0`.
-        /*
-            ...
-            @HttpNIMApiInterface.route('/v1/audio/transcriptions', methods=["post"])
-            async def transcriptions(
-                self,
-                file: UploadFile = File(...),
-                model: Optional[str] = Form(None),
-                language: Optional[str] = Form(None),
-                prompt: Optional[str] = Form(None),
-                response_format: Optional[str] = Form(None),
-                temperature: Optional[float] = Form(None),
-            ):
-            ...
-         */
-        val file: File = File(filename)
-        val fileBody: RequestBody = file.asRequestBody(mediaType.toMediaTypeOrNull())
-        val requestBody: RequestBody = MultipartBody.Builder().apply {
-            setType(MultipartBody.FORM)
-            // Determine filename based on media type
-            val formDataFilename = if (mediaType == "audio/ogg") "@audio.ogg" else "@audio.m4a"
-            
-            // Add file to payload
-            if (speechToTextBackend == context.getString(R.string.settings_option_openai_api) || 
-                speechToTextBackend == context.getString(R.string.settings_option_nvidia_nim)) {
-                addFormDataPart("file", formDataFilename, fileBody)
-            } else if (speechToTextBackend == context.getString(R.string.settings_option_whisper_asr_webservice)) {
-                addFormDataPart("audio_file", formDataFilename, fileBody)
-            }
-            // Add backend-specific parameters to payload
-            if (speechToTextBackend == context.getString(R.string.settings_option_openai_api)) {
-                addFormDataPart("model", model)
-                addFormDataPart("response_format", "text")
-            }
-            if (speechToTextBackend == context.getString(R.string.settings_option_nvidia_nim)) {
-                addFormDataPart("language", languageCode)
-                addFormDataPart("response_format", "text")
-            }
-        }.build()
-
-        val requestHeaders: Headers = Headers.Builder().apply {
-            if (speechToTextBackend == context.getString(R.string.settings_option_openai_api)) {
-                // Foolproof message
-                if (apiKey == "") {
-                    throw Exception(context.getString(R.string.error_apikey_unset))
-                }
-                add("Authorization", "Bearer $apiKey")
-            }
-            add("Content-Type", "multipart/form-data")
-        }.build()
-
-        // Build URL with endpoint-specific parameters
-        val url = when (speechToTextBackend) {
-            context.getString(R.string.settings_option_openai_api),
-            context.getString(R.string.settings_option_whisper_asr_webservice) -> {
-                "$endpoint?encode=true&task=transcribe&language=$languageCode&word_timestamps=false&output=txt"
-            }
-            else -> endpoint
-        }
-
-        return Request.Builder()
-            .headers(requestHeaders)
-            .url(url)
-            .post(requestBody)
-            .build()
+    /** Call from service destruction; stop() remains reusable for subsequent recordings. */
+    fun close() = synchronized(lifecycleLock) {
+        currentTranscriptionJob?.cancel()
+        currentTranscriptionJob = null
+        scope.cancel()
     }
+
+    fun destroy() = close()
 }

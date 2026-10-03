@@ -7,16 +7,16 @@
     <string name="loading">Loading…</string>
 
     <!-- Keyboard -->
-    <string name="recording">Recording…</string>
+    <string name="recording">Listening…</string>
     <string name="transcribing">Transcribing…</string>
     <string name="start_speech_to_text">Start speech-to-text.</string>
     <string name="start_transcribing">Start transcribing.</string>
-    <string name="grant_microphone_permission">Grant Microphone Permission</string>
+    <string name="grant_microphone_permission">Allow microphone</string>
     <string name="mic_permission_required">Whisper to Input requires microphone permission to work.</string>
     <string name="notification_permission_required">Whisper to Input requires notification permission to work.</string>
     <string name="microphone">Microphone</string>
-    <string name="successfully_set">Successfully set!</string>
-    <string name="backspace_button_hint">Backspace Button</string>
+    <string name="successfully_set">Settings saved</string>
+    <string name="backspace_button_hint">Delete · hold to repeat</string>
     <string name="btn_previous_ime_hint">Switch To Previous Input Method</string>
     <string name="generate_logcat">Generate Recent Logcat</string>
 
@@ -26,7 +26,7 @@
 
     <!-- Settings -->
     <string name="whisper_to_input_settings_title">Whisper To Input Settings</string>
-    <string name="settings_btn_apply">Apply</string>
+    <string name="settings_btn_apply">Save settings</string>
     <string name="settings_speech_to_text_backend">Speech to Text Backend</string>
     <string name="settings_speech_to_text_backend_desc">Use the official OpenAI API, Whisper ASR Webservice, or NVIDIA NIM backend.</string>
     <string name="settings_option_openai_api">OpenAI API</string>
@@ -45,34 +45,34 @@
         <item>@string/settings_option_whisper_asr_webservice</item>
         <item>@string/settings_option_nvidia_nim</item>
     </string-array>
-    <string name="settings_endpoint">Endpoint</string>
-    <string name="settings_endpoint_desc">The host and port for the OpenAI API, Whisper ASR Webservice, or NVIDIA NIM endpoint.</string>
+    <string name="settings_endpoint">Transcription URL</string>
+    <string name="settings_endpoint_desc">Full URL, including /v1/audio/transcriptions.</string>
     <string name="settings_endpoint_hint"><![CDATA[e.g., http://<host>:<port>/asr]]></string>
-    <string name="settings_language_code">Language Code</string>
-    <string name="settings_language_code_desc">The language code to be included in the request payload (e.g., en, zh).</string>
+    <string name="settings_language_code">Language</string>
+    <string name="settings_language_code_desc">Use en. The default Distil-Whisper model supports English only.</string>
     <string name="settings_language_code_hint">Enter Language Code (e.g., en, zh)</string>
-    <string name="settings_api_key">API Key</string>
-    <string name="settings_api_key_desc">The official OpenAI API Key to be used in requests.</string>
+    <string name="settings_api_key">API key (optional)</string>
+    <string name="settings_api_key_desc">Leave empty for gx10. HTTPS is required when using a key.</string>
     <string name="settings_api_key_hint">Enter OpenAI API Key…</string>
     <string name="settings_model">Model</string>
     <string name="settings_model_desc">The model to use for transcription (e.g., whisper-1).</string>
     <string name="settings_model_hint">Enter model name (e.g., whisper-1)</string>
     <string name="settings_option_yes">Yes</string>
     <string name="settings_option_no">No</string>
-    <string name="settings_auto_recording_start">Auto Recording Start</string>
-    <string name="settings_auto_recording_start_desc">Whether to automatically start recording upon opening the keyboard.</string>
+    <string name="settings_auto_recording_start">Record when opened</string>
+    <string name="settings_auto_recording_start_desc">Start listening when you switch to this keyboard. Off by default.</string>
     <string-array name="settings_auto_recording_start_array">
         <item>@string/settings_option_yes</item>
         <item>@string/settings_option_no</item>
     </string-array>
-    <string name="settings_auto_switch_back">Auto Switch Back</string>
+    <string name="settings_auto_switch_back">Return to previous keyboard</string>
     <string name="settings_auto_switch_back_desc">Automatically switch back to the previous keyboard after transcription.</string>
     <string-array name="settings_auto_switch_back_array">
         <item>@string/settings_option_yes</item>
         <item>@string/settings_option_no</item>
     </string-array>
-    <string name="settings_add_trailing_space">Add Trailing Space</string>
-    <string name="settings_add_trailing_space_desc">Whether to add a trailing space after the transcribed text.</string>
+    <string name="settings_add_trailing_space">Add a trailing space</string>
+    <string name="settings_add_trailing_space_desc">Add a space after each successful transcription.</string>
     <string-array name="settings_add_trailing_space_array">
         <item>@string/settings_option_yes</item>
         <item>@string/settings_option_no</item>
@@ -89,4 +89,58 @@
     </string-array>
     <string name="desc_space_bar">Space Bar</string>
 
+    <!-- Compact setup and private dictation UI -->
+    <string name="settings_intro">Your voice, your server. Dictate directly into any app.</string>
+    <string name="setup_title">Get ready to dictate</string>
+    <string name="setup_description">Allow the microphone, enable this keyboard, then choose it. Audio is sent to your configured server only when you dictate.</string>
+    <string name="microphone_needed">Microphone · permission needed</string>
+    <string name="microphone_allowed">Microphone · allowed</string>
+    <string name="microphone_ready">Microphone ready</string>
+    <string name="keyboard_not_enabled">Keyboard · not enabled</string>
+    <string name="keyboard_enabled">Keyboard · enabled</string>
+    <string name="enable_keyboard">Enable keyboard</string>
+    <string name="choose_keyboard">Choose keyboard</string>
+    <string name="server_title">Transcription server</string>
+    <string name="server_description">OpenAI-compatible audio endpoint. Defaults are configured for gx10 and English dictation.</string>
+    <string name="behavior_title">Dictation preferences</string>
+    <string name="allow_insecure">Allow HTTP for gx10</string>
+    <string name="http_warning">HTTP has no transport encryption. Use gx10 only on a trusted local network or through Tailscale. API keys require HTTPS and are never sent over HTTP.</string>
+    <string name="test_connection">Test connection</string>
+    <string name="test_connection_description">Checks /v1/models using these fields without saving, recording or uploading audio. This does not verify transcription.</string>
+    <string name="testing_connection">Checking server and model…</string>
+    <string name="settings_working">Working…</string>
+    <string name="settings_load_failed">Could not load settings. Retry before editing.</string>
+    <string name="settings_save_failed">Could not save settings. Your changes have not been saved.</string>
+    <string name="settings_invalid">These settings are not allowed. Check the endpoint, language and API key.</string>
+    <string name="invalid_endpoint">Enter a full URL ending in /v1/audio/transcriptions, without credentials, query or fragment.</string>
+    <string name="http_not_allowed">Use HTTPS, or allow HTTP specifically for gx10.</string>
+    <string name="http_key_not_allowed">Remove the API key or switch to HTTPS. Keys cannot be sent over HTTP.</string>
+    <string name="invalid_model">Enter a model ID without control characters.</string>
+    <string name="invalid_language">Enter a language code such as en.</string>
+    <string name="english_model_only">This Distil-Whisper model supports English only. Use en.</string>
+    <string name="invalid_api_key">Use an ASCII key without spaces or control characters (maximum 4096 characters).</string>
+    <string name="connection_failed">Could not connect securely. Check the server, network and TLS certificate. No audio was sent.</string>
+    <string name="connection_model_found">HTTP %1$d · server reached and model listed. No audio was sent.</string>
+    <string name="connection_model_missing">HTTP %1$d · server reached, but this model is not listed. Check the model ID.</string>
+    <string name="connection_no_models">HTTP %1$d · server reached, but the model list could not be verified.</string>
+    <string name="connection_auth_failed">HTTP %1$d · access denied. Check the API key or server access rules.</string>
+    <string name="connection_models_unsupported">HTTP %1$d · server reached, but /v1/models is unavailable. Transcription may still work.</string>
+    <string name="connection_redirect_refused">HTTP %1$d · redirect refused for privacy. Enter the final server URL.</string>
+    <string name="connection_http_error">HTTP %1$d · server returned an error. No audio was sent.</string>
+    <string name="system_screen_unavailable">This system screen could not be opened.</string>
+    <string name="retry">Retry</string>
+    <string name="keyboard_ready">Ready</string>
+    <string name="keyboard_ready_hint">Tap the microphone to dictate</string>
+    <string name="keyboard_recording_hint">Tap stop to transcribe</string>
+    <string name="keyboard_transcribing_hint">Waiting for your server · cancel anytime</string>
+    <string name="keyboard_sensitive">Dictation disabled</string>
+    <string name="keyboard_sensitive_hint">Voice input is unavailable in password fields</string>
+    <string name="keyboard_error">Could not transcribe</string>
+    <string name="stop_speech_to_text">Stop recording and transcribe</string>
+    <string name="cancel_dictation">Cancel dictation</string>
+    <string name="retry_dictation">Retry the current recording</string>
+    <string name="open_settings">Open dictation settings</string>
+    <string name="enter_key">Enter</string>
+    <string name="transcribe_enter">Stop recording, transcribe and add a newline</string>
+    <string name="transcribe_space">Stop recording, transcribe and add a space</string>
 </resources>
