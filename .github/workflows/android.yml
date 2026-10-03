@@ -82,13 +82,13 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
           script: |
             adb shell wm size 1080x2280
             adb shell wm density 480
             cd android && ./gradlew --no-daemon connectedDebugAndroidTest
             mkdir -p android/app/build/screenshots
-            adb pull /sdcard/Android/data/com.jackthelobster.whispertoinput/files/screenshots android/app/build/screenshots
+            adb pull /sdcard/whisper-verification android/app/build/screenshots
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         if: always()
         with:

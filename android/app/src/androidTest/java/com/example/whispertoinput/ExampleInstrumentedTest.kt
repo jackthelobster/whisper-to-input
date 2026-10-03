@@ -98,5 +98,78 @@ class ExampleInstrumentedTest {
         target.parentFile!!.mkdirs()
         target.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
+        // AGP uninstalls the tested APK at teardown, deleting its external-files directory.
+        // Copy the dummy-data screenshots out using the test runner's shell identity first.
+        val result = shell("mkdir -p /sdcard/whisper-verification && cp '${target.absolutePath}' '/sdcard/whisper-verification/$name.png' && printf copied")
+        assertEquals("copied", result)
     }
+
+    @Test fun actualInputMethodStartsAndBlocksPasswordField() {
+        runBlocking { SettingsRepository(context).save(AppSettings()) }
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val serviceInfo = requireNotNull(automation.serviceInfo)
+        serviceInfo.flags = serviceInfo.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+            android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        automation.serviceInfo = serviceInfo
+        val previous = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD)
+        val ime = "${context.packageName}/com.example.whispertoinput.WhisperInputService"
+        try {
+            shell("ime enable $ime && ime set $ime")
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                val deadline = android.os.SystemClock.elapsedRealtime() + 10000
+                var ready = false
+                while (!ready && android.os.SystemClock.elapsedRealtime() < deadline) {
+                    scenario.onActivity { activity ->
+                        ready = activity.hasWindowFocus() && activity.findViewById<EditText>(R.id.field_endpoint).isEnabled
+                    }
+                    if (!ready) android.os.SystemClock.sleep(100)
+                }
+                assertTrue("Settings window did not become ready", ready)
+                scenario.onActivity { activity ->
+                    val field = activity.findViewById<EditText>(R.id.field_endpoint)
+                    field.requestFocus()
+                    (activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                        .showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
+                assertTrue("Actual IME microphone did not become enabled for an ordinary text field", awaitMicEnabled(true))
+                scenario.onActivity { activity ->
+                    val field = activity.findViewById<EditText>(R.id.field_api_key)
+                    field.requestFocus()
+                    (activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                        .showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
+                assertTrue("Actual IME microphone did not block a password/private field", awaitMicEnabled(false))
+            }
+        } finally {
+            if (!previous.isNullOrBlank()) shell("ime set $previous")
+            shell("ime disable $ime")
+        }
+    }
+
+    private fun awaitMicEnabled(expected: Boolean): Boolean {
+        val deadline = android.os.SystemClock.elapsedRealtime() + 15000
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            val roots = InstrumentationRegistry.getInstrumentation().uiAutomation.windows
+                .filter { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+                .mapNotNull { it.root }
+            if (roots.any { micEnabled(it) == expected }) return true
+            android.os.SystemClock.sleep(100)
+        }
+        return false
+    }
+
+    private fun micEnabled(node: android.view.accessibility.AccessibilityNodeInfo): Boolean? {
+        if (node.viewIdResourceName?.endsWith(":id/btn_mic") == true) return node.isEnabled
+        for (index in 0 until node.childCount) {
+            val child = node.getChild(index) ?: continue
+            val found = micEnabled(child)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation
+        .executeShellCommand(command).use { descriptor ->
+            java.io.FileInputStream(descriptor.fileDescriptor).bufferedReader().use { it.readText() }
+        }
 }
