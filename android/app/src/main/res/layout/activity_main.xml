@@ -58,7 +58,7 @@
 
             <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
                 <LinearLayout style="@style/CardContents">
-                    <TextView style="@style/SettingsLabel" android:text="@string/setup_title" />
+                    <TextView android:id="@+id/setup_heading" style="@style/SettingsLabel" android:text="@string/setup_title" />
                     <TextView style="@style/SettingsDescription" android:text="@string/setup_description" />
                     <TextView android:id="@+id/microphone_status" style="@style/SetupStatus" android:text="@string/microphone_needed" />
                     <com.google.android.material.button.MaterialButton
@@ -82,7 +82,7 @@
 
             <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
                 <LinearLayout style="@style/CardContents">
-                    <TextView style="@style/SettingsLabel" android:text="@string/server_title" />
+                    <TextView android:id="@+id/server_heading" style="@style/SettingsLabel" android:text="@string/server_title" />
                     <TextView style="@style/SettingsDescription" android:text="@string/server_description" />
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/input_endpoint"
@@ -164,7 +164,7 @@
 
             <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
                 <LinearLayout style="@style/CardContents">
-                    <TextView style="@style/SettingsLabel" android:text="@string/behavior_title" />
+                    <TextView android:id="@+id/behavior_heading" style="@style/SettingsLabel" android:text="@string/behavior_title" />
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_auto_record"
                         style="@style/SettingsSwitch"

@@ -103,6 +103,12 @@ class MainActivity : AppCompatActivity() {
             insets
         }
         ViewCompat.requestApplyInsets(root)
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightNavigationBars =
+            resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK !=
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+        listOf(R.id.setup_heading, R.id.server_heading, R.id.behavior_heading).forEach {
+            ViewCompat.setAccessibilityHeading(findViewById(it), true)
+        }
         repository = SettingsRepository(applicationContext)
         endpoint = findViewById(R.id.field_endpoint)
         model = findViewById(R.id.field_model)

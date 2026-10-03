@@ -87,8 +87,8 @@ jobs:
             adb shell wm size 1080x2280
             adb shell wm density 480
             cd android && ./gradlew --no-daemon connectedDebugAndroidTest
-            mkdir -p app/build/screenshots
-            adb pull /sdcard/Android/data/com.jackthelobster.whispertoinput/files/screenshots app/build/screenshots
+            mkdir -p android/app/build/screenshots
+            adb pull /sdcard/Android/data/com.jackthelobster.whispertoinput/files/screenshots android/app/build/screenshots
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         if: always()
         with:
