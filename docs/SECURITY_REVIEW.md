@@ -7,7 +7,7 @@ This is a source review and regression-test effort, not a penetration-test certi
 
 ## Findings in the upstream baseline
 
-| Priority | Finding | Location in baseline | Remediation target |
+| Priority | Finding | Location in baseline | Implemented remediation |
 |---|---|---|---|
 | High | Backup enabled, API key stored as plaintext in preferences; backup/extraction rules are unconfigured templates. | MainActivity.kt API_KEY, manifest and backup XML | Keystore-backed AES-GCM encrypted key; exclude all settings from cloud and device-transfer backup. |
 | High | Global HTTP cleartext traffic permitted. Credentials may be sent to user-configured insecure URLs. | AndroidManifest.xml; WhisperTranscriber.kt | Standard TLS for general endpoints; HTTP exception only for exact gx10; explicit local-HTTP switch; do not send API keys over HTTP; no redirects. |
@@ -49,4 +49,35 @@ The server schema accepts English only (en/english), despite the upstream keyboa
 
 ## Verification status
 
-Implementation, automated tests, signed build and Android 12 emulator verification are being prepared. This section must be updated with actual CI outcomes before the review is presented as completed.
+The application and test changes were verified at commit 41c139b3f9f076db1ed992f27968fd9c6047a4c5 in jackthelobster/whisper-to-input. GitHub Actions push run 37134115716 and pull-request run 37134118406 both completed successfully on 3 October 2026.
+
+| Check | Executed result |
+|---|---|
+| JVM regression tests | 45 tests across seven suites; zero failures, errors or skipped tests |
+| Android lint | lintRelease passed with abortOnError enabled |
+| APK assembly | Release, debug and instrumentation APKs built successfully |
+| Android 12 instrumentation | Four tests passed; zero failures, errors or skipped tests |
+| Actual IME service | Selected through Android's input-method manager; microphone enabled in an ordinary editor and disabled in a password editor |
+| Credential protection | Actual Android Keystore encryption/read-back passed; app preference files checked for the dummy plaintext key |
+| Network/permission policy | Exact gx10 cleartext exception and absence of unused storage/notification permissions verified on Android 12 |
+| Interface rendering | Six screenshots exported successfully at 1080 × 2280 / 480 dpi; light/dark settings and ready/listening keyboard images visually reviewed |
+| Release signature | apksigner verification passed, APK Signature Scheme v2, one 4096-bit RSA signer |
+| APK manifest | com.jackthelobster.whispertoinput; version 0.5.0 / code 5; minimum API 24, target API 35 |
+| Live custom endpoint | Actual AAC M4A transcription against gx10:8020 passed using the public JFK fixture |
+
+Exact signed APK SHA-256: 2e9cc39570921b085334548b739e32ed20e0c1fc090fcde01834a2115a8ca5fe.
+
+Signing certificate SHA-256: bd068398a89597db9009b1350b013ac7aa8bbc5f205396f8b4513ce11f988853.
+
+Instrumentation exercised the debug build. The minified release APK was assembled and its signature/manifest/hash verified; it has not been exercised on a physical Samsung device. The live server request was issued from the development host, not the S10e. This distinction is intentional: emulator checks and a server fixture are not proof of Samsung microphone behavior or the handset's private-network connectivity.
+
+The initial emulator workflow failures were traced to screenshot teardown and direct-process command execution in the test harness. These were corrected rather than suppressing the failures. The successful runs include an assertion that the expected IME really was selected and that every exported screenshot existed.
+
+Physical-device acceptance remains pending. Follow INSTALL_ANDROID12.md to install and test microphone capture, a full handset-to-server dictation round-trip, cancellation/editor switching, Unicode deletion, Samsung keyboard switching, large fonts and landscape. No claim of penetration-test certification, comprehensive transitive dependency clearance or physical-device verification is made.
+
+## Additional integration safeguards
+
+- API-key ciphertext is stored with an endpoint binding in the same committed preference write. A torn settings save cannot silently send a new key to the previous endpoint; mismatched settings require explicit re-entry.
+- An unreadable or invalidated Keystore credential causes a sanitized error, not a silent anonymous fallback. The settings screen has an explicit recovery path, and only a completed Save restores usable settings.
+- If switching to a previous keyboard fails, this keyboard remains usable and opens the system picker rather than staying disabled.
+- Source, GPL license and upstream attribution are preserved. Upstream ASR-specific protocols, NIM-specific OGG mode and Chinese conversion options are intentionally outside this fork's OpenAI-compatible multipart focus and are described as such in the README.
