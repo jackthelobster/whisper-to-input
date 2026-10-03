@@ -25,7 +25,7 @@ class ExampleInstrumentedTest {
 
     @Test fun packagePermissionsAndCleartextPolicy() {
         assertEquals("com.jackthelobster.whispertoinput", context.packageName)
-        val permissions = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS).requestedPermissions.toSet()
+        val permissions = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty().toSet()
         assertTrue(Manifest.permission.RECORD_AUDIO in permissions)
         assertFalse(Manifest.permission.WRITE_EXTERNAL_STORAGE in permissions)
         assertFalse(Manifest.permission.POST_NOTIFICATIONS in permissions)

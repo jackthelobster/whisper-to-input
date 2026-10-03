@@ -26,6 +26,12 @@ class SettingsRepositoryTest {
         var writes = 0
         var failWrite = false
         var failRead = false
+        var endpoint: String? = null
+        override fun boundEndpoint(): String? = if (value != null) endpoint else null
+        override fun writeBound(value: String, endpoint: String) {
+            write(value)
+            this.endpoint = endpoint
+        }
         override fun contains() = value != null
         override fun read(): String {
             if (failRead) error("private credential failure")
@@ -111,6 +117,28 @@ class SettingsRepositoryTest {
         assertNull(store.state.value[API_KEY])
         assertFalse(store.state.value.asMap().values.contains("unit-test-token"))
         repository.save(settings.copy(apiKey = ""))
+        assertEquals("", repository.load().apiKey)
+    }
+
+    @Test fun tornSaveRefusesToUseNewKeyWithPreviousEndpoint() = runBlocking {
+        val store = MemoryStore(preferencesOf(ENDPOINT to "https://previous.example/v1/audio/transcriptions"))
+        val credentials = MemoryCredentials("new-server-key").apply {
+            endpoint = "https://new.example/v1/audio/transcriptions"
+        }
+        try {
+            SettingsRepository(store, credentials).load()
+            fail("A mismatched destination must fail closed")
+        } catch (e: TranscriptionException) {
+            assertTrue(e.message!!.contains("Re-enter"))
+            assertFalse(e.message!!.contains("new-server-key"))
+        }
+    }
+
+    @Test fun explicitRecoveryCanClearAnUnreadableCredential() = runBlocking {
+        val credentials = MemoryCredentials("damaged-key").apply { failRead = true }
+        val repository = SettingsRepository(MemoryStore(), credentials)
+        repository.save(AppSettings())
+        credentials.failRead = false
         assertEquals("", repository.load().apiKey)
     }
 

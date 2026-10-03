@@ -176,7 +176,22 @@ class MainActivity : AppCompatActivity() {
                 throw cancelled
             } catch (_: Exception) {
                 Snackbar.make(findViewById(R.id.settings_root), R.string.settings_load_failed, Snackbar.LENGTH_INDEFINITE)
-                    .setAction(R.string.retry) { loadSettings() }.show()
+                    .setAction(R.string.reenter_settings) {
+                        // Do not silently retry with empty credentials. Explicit recovery enables
+                        // the form; the service still refuses unreadable settings until Save succeeds.
+                        val defaults = AppSettings()
+                        endpoint.setText(defaults.endpoint)
+                        model.setText(defaults.model)
+                        language.setText(defaults.language)
+                        apiKey.setText("")
+                        autoRecord.isChecked = false
+                        autoSwitch.isChecked = false
+                        trailingSpace.isChecked = false
+                        allowInsecure.isChecked = defaults.allowInsecure
+                        savedSettings = null
+                        loaded = true
+                        setBusy(false)
+                    }.show()
             } finally {
                 setBusy(false)
             }
@@ -224,7 +239,7 @@ class MainActivity : AppCompatActivity() {
         setBusy(true)
         lifecycleScope.launch {
             try {
-                // One repository transaction; success is announced only after persistence completes.
+                // Repository persistence finishes before announcing success; keys are destination-bound.
                 repository.save(settings)
                 savedSettings = settings
                 Snackbar.make(findViewById(R.id.settings_root), R.string.successfully_set, Snackbar.LENGTH_SHORT).show()

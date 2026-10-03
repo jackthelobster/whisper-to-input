@@ -109,7 +109,8 @@
     <string name="test_connection_description">Checks /v1/models using these fields without saving, recording or uploading audio. This does not verify transcription.</string>
     <string name="testing_connection">Checking server and model…</string>
     <string name="settings_working">Working…</string>
-    <string name="settings_load_failed">Could not load settings. Retry before editing.</string>
+    <string name="settings_load_failed">Saved settings or API key could not be read. Re-enter settings to recover.</string>
+    <string name="reenter_settings">Re-enter</string>
     <string name="settings_save_failed">Could not save settings. Your changes have not been saved.</string>
     <string name="settings_invalid">These settings are not allowed. Check the endpoint, language and API key.</string>
     <string name="invalid_endpoint">Enter a full URL ending in /v1/audio/transcriptions, without credentials, query or fragment.</string>
@@ -141,6 +142,6 @@
     <string name="retry_dictation">Retry the current recording</string>
     <string name="open_settings">Open dictation settings</string>
     <string name="enter_key">Enter</string>
-    <string name="transcribe_enter">Stop recording, transcribe and add a newline</string>
+    <string name="transcribe_enter">Stop recording and transcribe without submitting</string>
     <string name="transcribe_space">Stop recording, transcribe and add a space</string>
 </resources>

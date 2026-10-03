@@ -42,8 +42,16 @@ class SettingsRepository internal constructor(
             try {
                 val preferences = store.data.first()
                 migrateLegacyKey(preferences)
+                val endpoint = preferences[ENDPOINT]?.takeIf { it.isNotBlank() } ?: DEFAULT_ENDPOINT
+                // The ciphertext and its destination commit together in one preferences file.
+                // A crash between that commit and DataStore must fail closed, never send a
+                // newly entered server's key to a previously configured endpoint.
+                val boundEndpoint = credentials.boundEndpoint()
+                if (boundEndpoint != null && boundEndpoint != endpoint) {
+                    throw TranscriptionException("Saved credentials do not match the endpoint. Re-enter and save your settings.")
+                }
                 AppSettings(
-                    endpoint = preferences[ENDPOINT]?.takeIf { it.isNotBlank() } ?: DEFAULT_ENDPOINT,
+                    endpoint = endpoint,
                     model = preferences[MODEL]?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL,
                     language = preferences[LANGUAGE_CODE] ?: "en",
                     apiKey = credentials.read(),
@@ -68,7 +76,7 @@ class SettingsRepository internal constructor(
                 // Once persisting starts, finish both stores even if the UI is destroyed.
                 withContext(NonCancellable) {
                     try {
-                        credentials.write(settings.apiKey)
+                        credentials.writeBound(settings.apiKey, settings.endpoint)
                     } finally {
                         // Including empty legacy keys and encryption failure: never keep plaintext.
                         store.edit { it.remove(API_KEY) }
@@ -96,7 +104,8 @@ class SettingsRepository internal constructor(
         withContext(NonCancellable) {
             try {
                 // Existing encrypted credentials win; an old plaintext value must not overwrite them.
-                if (!credentials.contains()) credentials.write(legacy)
+                if (!credentials.contains()) credentials.writeBound(legacy,
+                    preferences[ENDPOINT]?.takeIf { it.isNotBlank() } ?: DEFAULT_ENDPOINT)
             } finally {
                 store.edit { it.remove(API_KEY) }
             }

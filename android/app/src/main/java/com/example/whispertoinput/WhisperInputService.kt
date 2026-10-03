@@ -317,12 +317,12 @@ class WhisperInputService : InputMethodService() {
                         }
                     }
                 },
-                { _ ->
+                { message ->
                     serviceScope.launch {
                         if (!ownsRequest(session, request, audio)) return@launch
                         session.transcribing = false
-                        // Only this still-visible, non-sensitive session may retain audio for retry.
-                        showError("Transcription failed. Check settings or retry.")
+                        // WhisperTranscriber only emits fixed, sanitized client-side messages.
+                        showError(message)
                     }
                 },
             )
@@ -398,12 +398,17 @@ class WhisperInputService : InputMethodService() {
 
     private fun onSwitchIme() {
         invalidateSession()
-        if (Build.VERSION.SDK_INT >= IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL) {
+        val manager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        val switched = if (Build.VERSION.SDK_INT >= IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL) {
             switchToPreviousInputMethod()
         } else {
-            val manager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
             val token: IBinder? = window?.window?.attributes?.token
             manager.switchToLastInputMethod(token)
+        }
+        if (!switched) {
+            // No previous keyboard must not leave this visible keyboard permanently disabled.
+            beginSessionIfReady()
+            manager.showInputMethodPicker()
         }
     }
 

@@ -14,6 +14,8 @@ internal interface CredentialStore {
     fun contains(): Boolean
     fun read(): String
     fun write(value: String)
+    fun boundEndpoint(): String? = null
+    fun writeBound(value: String, endpoint: String) = write(value)
 }
 
 /** No exportable key material, plaintext preferences, trust-all TLS, or logging. */
@@ -39,10 +41,17 @@ internal class KeystoreCredentialStore(context: Context) : CredentialStore {
         return cipher.doFinal(encrypted).toString(Charsets.UTF_8)
     }
 
-    override fun write(value: String) {
+    override fun boundEndpoint(): String? = if (contains()) preferences.getString(ENDPOINT_BINDING, null) else null
+
+    override fun write(value: String) = persist(value, null)
+
+    override fun writeBound(value: String, endpoint: String) = persist(value, endpoint)
+
+    private fun persist(value: String, endpoint: String?) {
         val editor = preferences.edit()
         if (value.isEmpty()) {
             editor.remove(ENTRY)
+            editor.remove(ENDPOINT_BINDING)
         } else {
             val store = keyStore()
             val key = store.getKey(alias, null) as? SecretKey ?: generateKey()
@@ -54,6 +63,8 @@ internal class KeystoreCredentialStore(context: Context) : CredentialStore {
             val iv = Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
             val ciphertext = Base64.encodeToString(encrypted, Base64.NO_WRAP)
             editor.putString(ENTRY, "v1:$iv:$ciphertext")
+            if (endpoint == null) editor.remove(ENDPOINT_BINDING)
+            else editor.putString(ENDPOINT_BINDING, endpoint)
         }
         check(editor.commit()) { "Credential storage failed" }
     }
@@ -74,6 +85,7 @@ internal class KeystoreCredentialStore(context: Context) : CredentialStore {
 
     companion object {
         private const val ENTRY = "api-key-ciphertext"
+        private const val ENDPOINT_BINDING = "api-key-endpoint"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }
