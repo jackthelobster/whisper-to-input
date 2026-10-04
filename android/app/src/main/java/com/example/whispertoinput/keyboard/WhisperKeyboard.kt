@@ -50,10 +50,8 @@ class WhisperKeyboard {
     private var waitingIcon: ProgressBar? = null
     private var amplitudeRing: View? = null
 
-    // Keep the existing service's positional and named argument contract intact.
     fun setup(
         layoutInflater: LayoutInflater,
-        shouldOfferImeSwitch: Boolean,
         onStartRecording: () -> Unit,
         onCancelRecording: () -> Unit,
         onStartTranscribing: (attachToEnd: String) -> Unit,
@@ -113,7 +111,8 @@ class WhisperKeyboard {
             onOpenSettings()
         }
         view.findViewById<ImageButton>(R.id.btn_previous_ime).apply {
-            visibility = if (shouldOfferImeSwitch) View.VISIBLE else View.GONE
+            // Returning from voice input is always available. The service opens the picker
+            // if Android has no previous keyboard; the next-IME hint does not apply here.
             setOnClickListener {
                 buttonBackspace?.stopRepeating()
                 onSwitchIme()

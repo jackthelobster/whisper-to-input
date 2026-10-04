@@ -17,7 +17,7 @@
     <string name="microphone">Microphone</string>
     <string name="successfully_set">Settings saved</string>
     <string name="backspace_button_hint">Delete · hold to repeat</string>
-    <string name="btn_previous_ime_hint">Switch To Previous Input Method</string>
+    <string name="btn_previous_ime_hint">Back to typing keyboard</string>
     <string name="generate_logcat">Generate Recent Logcat</string>
 
     <!-- Warning and Error Messages -->
@@ -92,7 +92,7 @@
     <!-- Compact setup and private dictation UI -->
     <string name="settings_intro">Your voice, your server. Dictate directly into any app.</string>
     <string name="setup_title">Get ready to dictate</string>
-    <string name="setup_description">Allow the microphone, enable this keyboard, then choose it. Audio is sent to your configured server only when you dictate.</string>
+    <string name="setup_description">Allow the microphone and enable Whisper Input. Keep your typing keyboard as default, then select Whisper Input using the keyboard switcher while typing. Audio is sent to your configured server only when you dictate.</string>
     <string name="microphone_needed">Microphone · permission needed</string>
     <string name="microphone_allowed">Microphone · allowed</string>
     <string name="microphone_ready">Microphone ready</string>

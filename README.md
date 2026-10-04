@@ -19,9 +19,13 @@ Only English is supported by this particular distil-whisper server. Other OpenAI
 
 1. Install the fork’s signed APK, not the upstream release linked further below. The fork uses a separate application ID, com.jackthelobster.whispertoinput, so it can coexist with the original.
 2. Open the app and grant microphone permission using its setup button. No notification or storage permission is needed.
-3. Enable the keyboard using the app’s Enable button, then use Choose keyboard. Samsung also exposes this under Settings → General management → Keyboard list and default.
+3. Enable Whisper Input using the app’s Enable button. Samsung also exposes this under Settings → General management → Keyboard list and default. Keep Samsung Keyboard (or your usual typing keyboard) as the default. With a text field and the typing keyboard open, use the navigation bar’s keyboard button to select Whisper Input.
 4. Keep the pre-filled settings above, use Test connection, and save any changes. The S10e must be able to resolve gx10 and reach port 8020 through your local network or VPN.
 5. In an ordinary text field, switch to Whisper Input. Tap the microphone, speak English, then tap Stop to transcribe and insert text. Cancel discards audio. Failed uploads can be retried only while the same field remains active. Switching fields or hiding the keyboard cancels work and deletes the recording.
+
+The top-left back arrow returns to the previous typing keyboard. It is available while listening, transcribing, idle or in a protected field; leaving cancels unfinished dictation. If Android has no previous keyboard, the arrow opens the keyboard picker. Enable “Return to previous keyboard” in settings to return automatically after successful transcription.
+
+Whisper Input registers as an auxiliary voice input rather than a typing keyboard. Android makes auxiliary inputs available in the keyboard picker while a keyboard is open; they are not intended as the default typing keyboard. This follows [Android’s voice-input subtype behavior](https://developer.android.com/reference/android/view/inputmethod/InputMethodSubtype#isAuxiliary()). Samsung’s microphone button uses its own provider selection: [Samsung documents Samsung voice input and Google Voice Typing](https://www.samsung.com/us/support/answer/ANS10001592/). Registering a voice subtype does not guarantee that Samsung will offer Whisper there. Use the navigation-bar keyboard picker to enter Whisper on Samsung devices.
 
 HTTP itself is unencrypted. The exception is restricted to exact gx10, requires the local-HTTP switch, and never accepts an API key. Use only over a trusted private network or encrypted VPN; use HTTPS for other servers. Password/private fields disable dictation. A recording is limited to two minutes.
 

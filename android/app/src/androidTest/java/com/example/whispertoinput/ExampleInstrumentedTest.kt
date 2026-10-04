@@ -34,6 +34,46 @@ class ExampleInstrumentedTest {
         assertFalse(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("attacker.gx10"))
     }
 
+    @Test fun inputMethodRegistersAsTemporaryVoiceInput() {
+        val manager = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val info = manager.inputMethodList.single { it.packageName == context.packageName }
+        assertEquals(1, info.subtypeCount)
+        val subtype = info.getSubtypeAt(0)
+        assertEquals("voice", subtype.mode)
+        assertTrue(subtype.isAuxiliary)
+        assertTrue("Voice subtype must be enabled without language selection", subtype.overridesImplicitlyEnabledSubtype())
+    }
+
+    @Test fun returnArrowWorksInEveryDictationState() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var switchRequests = 0
+                val keyboard = WhisperKeyboard()
+                val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {},
+                    { switchRequests++ }, {}, { false })
+                val back = view.findViewById<View>(R.id.btn_previous_ime)
+                fun pressBack() {
+                    assertEquals(View.VISIBLE, back.visibility)
+                    assertTrue(back.isEnabled)
+                    assertEquals(activity.getString(R.string.btn_previous_ime_hint), back.contentDescription)
+                    assertTrue(back.performClick())
+                }
+                pressBack() // Idle; independent of Android's next-IME availability hint.
+                keyboard.setSensitiveInput(true)
+                pressBack() // Password/private field.
+                keyboard.setSensitiveInput(false)
+                keyboard.tryStartRecording()
+                pressBack() // Listening.
+                keyboard.tryStartTranscribing("")
+                pressBack() // Uploading; the service cancels the request before switching.
+                keyboard.showError("Test transcription error")
+                pressBack()
+                assertEquals(5, switchRequests)
+                keyboard.reset()
+            }
+        }
+    }
+
     @Test fun credentialsAreEncryptedAndRoundTrip() = runBlocking {
         val repository = SettingsRepository(context)
         val secret = "instrumentation-only-placeholder-secret-7341"
@@ -66,7 +106,7 @@ class ExampleInstrumentedTest {
                     assertTrue("Settings screen must protect secrets from screenshots", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                     capture(activity.findViewById(android.R.id.content), activity.getExternalFilesDir(null)!!, "settings-$label")
                     val keyboard = WhisperKeyboard()
-                    val view = keyboard.setup(activity.layoutInflater, true, {}, {}, {}, {}, {}, {}, {}, {}, {}, { false })
+                    val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {}, {}, {}, { false })
                     activity.setContentView(view)
                     view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
                     view.layout(0, 0, view.measuredWidth, view.measuredHeight)

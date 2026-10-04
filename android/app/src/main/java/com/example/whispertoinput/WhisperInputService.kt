@@ -103,17 +103,8 @@ class WhisperInputService : InputMethodService() {
     override fun onCreateInputView(): View {
         invalidateSession()
         keyboardReady = false
-        val shouldOfferImeSwitch =
-            if (Build.VERSION.SDK_INT >= IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL) {
-                shouldOfferSwitchingToNextInputMethod()
-            } else {
-                val manager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-                val token: IBinder? = window?.window?.attributes?.token
-                manager.shouldOfferSwitchingToNextInputMethod(token)
-            }
         val view = whisperKeyboard.setup(
             layoutInflater,
-            shouldOfferImeSwitch,
             { onStartRecording() },
             { onCancelRecording() },
             { attachToEnd -> onStartTranscription(attachToEnd) },

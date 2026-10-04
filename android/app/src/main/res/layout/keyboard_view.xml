@@ -31,7 +31,7 @@
         android:layout_height="48dp"
         android:padding="12dp"
         android:contentDescription="@string/btn_previous_ime_hint"
-        app:srcCompat="@drawable/ic_dictation_switch"
+        app:srcCompat="@drawable/ic_dictation_back"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
     <androidx.appcompat.widget.AppCompatImageButton
