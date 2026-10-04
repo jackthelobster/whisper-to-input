@@ -19,65 +19,38 @@
 
 package com.example.whispertoinput.keyboard
 
-import android.util.Log
-import android.view.GestureDetector
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.math.MathUtils
 import com.example.whispertoinput.R
 import kotlin.math.log10
-import kotlin.math.pow
 
-private const val AMPLITUDE_CLAMP_MIN: Int = 10
-private const val AMPLITUDE_CLAMP_MAX: Int = 25000
-private const val LOG_10_10: Float = 1.0F
-private const val LOG_10_25000: Float = 4.398F
-private const val AMPLITUDE_ANIMATION_DURATION: Long = 500
-private val amplitudePowers: Array<Float> = arrayOf(0.5f, 1.0f, 2f, 3f)
-
+/** View-only dictation controller; audio and retry-file ownership remain in the input service. */
 class WhisperKeyboard {
-    private enum class KeyboardStatus {
-        Idle,             // Ready to start recording
-        Recording,       // Currently recording
-        Transcribing,    // Waiting for transcription results
-    }
-
-    // Keyboard event listeners. Assignable custom behaviors upon certain UI events (user-operated).
-    private var onStartRecording: () -> Unit = { }
-    private var onCancelRecording: () -> Unit = { }
-    private var onStartTranscribing: (attachToEnd: String) -> Unit = { }
-    private var onCancelTranscribing: () -> Unit = { }
-    private var onButtonBackspace: () -> Unit = { }
-    private var onSwitchIme: () -> Unit = { }
-    private var onOpenSettings: () -> Unit = { }
-    private var onEnter: () -> Unit = { }
-    private var onSpaceBar: () -> Unit = { }
+    private enum class KeyboardStatus { Idle, Recording, Transcribing }
+    private var keyboardStatus = KeyboardStatus.Idle
+    private var sensitiveInput = false
+    private var errorMessage: String? = null
+    private var onStartRecording: () -> Unit = {}
+    private var onCancelRecording: () -> Unit = {}
+    private var onStartTranscribing: (String) -> Unit = {}
+    private var onCancelTranscribing: () -> Unit = {}
     private var shouldShowRetry: () -> Boolean = { false }
-
-    // Keyboard Status
-    private var keyboardStatus: KeyboardStatus = KeyboardStatus.Idle
-
-    // Views & Keyboard Layout
-    private var keyboardView: ConstraintLayout? = null
+    private var keyboardView: View? = null
     private var buttonMic: ImageButton? = null
     private var buttonEnter: ImageButton? = null
     private var buttonCancel: ImageButton? = null
     private var buttonRetry: ImageButton? = null
-    private var labelStatus: TextView? = null
     private var buttonSpaceBar: ImageButton? = null
-    private var waitingIcon: ProgressBar? = null
     private var buttonBackspace: BackspaceButton? = null
-    private var buttonPreviousIme: ImageButton? = null
-    private var buttonSettings: ImageButton? = null
-    private var micRippleContainer: ConstraintLayout? = null
-    private var micRipples: Array<ImageView> = emptyArray()
+    private var labelStatus: TextView? = null
+    private var labelHint: TextView? = null
+    private var waitingIcon: ProgressBar? = null
+    private var amplitudeRing: View? = null
 
+    // Keep the existing service's positional and named argument contract intact.
     fun setup(
         layoutInflater: LayoutInflater,
         shouldOfferImeSwitch: Boolean,
@@ -92,232 +65,193 @@ class WhisperKeyboard {
         onOpenSettings: () -> Unit,
         shouldShowRetry: () -> Boolean,
     ): View {
-        // Inflate the keyboard layout & assign views
-        keyboardView = layoutInflater.inflate(R.layout.keyboard_view, null) as ConstraintLayout
-        buttonMic = keyboardView!!.findViewById(R.id.btn_mic) as ImageButton
-        buttonEnter = keyboardView!!.findViewById(R.id.btn_enter) as ImageButton
-        buttonCancel = keyboardView!!.findViewById(R.id.btn_cancel) as ImageButton
-        buttonRetry = keyboardView!!.findViewById(R.id.btn_retry) as ImageButton
-        labelStatus = keyboardView!!.findViewById(R.id.label_status) as TextView
-        buttonSpaceBar = keyboardView!!.findViewById(R.id.btn_space_bar) as ImageButton
-        waitingIcon = keyboardView!!.findViewById(R.id.pb_waiting_icon) as ProgressBar
-        buttonBackspace = keyboardView!!.findViewById(R.id.btn_backspace) as BackspaceButton
-        buttonPreviousIme = keyboardView!!.findViewById(R.id.btn_previous_ime) as ImageButton
-        buttonSettings = keyboardView!!.findViewById(R.id.btn_settings) as ImageButton
-        micRippleContainer = keyboardView!!.findViewById(R.id.mic_ripples) as ConstraintLayout
-        micRipples = arrayOf(
-            keyboardView!!.findViewById(R.id.mic_ripple_0) as ImageView,
-            keyboardView!!.findViewById(R.id.mic_ripple_1) as ImageView,
-            keyboardView!!.findViewById(R.id.mic_ripple_2) as ImageView,
-            keyboardView!!.findViewById(R.id.mic_ripple_3) as ImageView
-        )
-
-        // Hide buttonPreviousIme if necessary
-        if (!shouldOfferImeSwitch) {
-            buttonPreviousIme!!.visibility = View.GONE
-        }
-
-        // Set onClick listeners
-        buttonMic!!.setOnClickListener { onButtonMicClick() }
-        buttonEnter!!.setOnClickListener { onButtonEnterClick() }
-        buttonCancel!!.setOnClickListener { onButtonCancelClick() }
-        buttonRetry!!.setOnClickListener { onButtonRetryClick() }
-        buttonSettings!!.setOnClickListener { onButtonSettingsClick() }
-        buttonBackspace!!.setBackspaceCallback { onButtonBackspaceClick() }
-        buttonSpaceBar!!.setOnClickListener { onButtonSpaceBarClick() }
-
-        if (shouldOfferImeSwitch) {
-            buttonPreviousIme!!.setOnClickListener { onButtonPreviousImeClick() }
-        }
-
-        // Set event listeners
+        buttonBackspace?.stopRepeating()
         this.onStartRecording = onStartRecording
         this.onCancelRecording = onCancelRecording
         this.onStartTranscribing = onStartTranscribing
         this.onCancelTranscribing = onCancelTranscribing
-        this.onButtonBackspace = onButtonBackspace
-        this.onSwitchIme = onSwitchIme
-        this.onOpenSettings = onOpenSettings
-        this.onEnter = onEnter
-        this.onSpaceBar = onSpaceBar
         this.shouldShowRetry = shouldShowRetry
-
-        // Resets keyboard upon setup
+        val view = layoutInflater.inflate(R.layout.keyboard_view, null)
+        keyboardView = view
+        buttonMic = view.findViewById(R.id.btn_mic)
+        buttonEnter = view.findViewById(R.id.btn_enter)
+        buttonCancel = view.findViewById(R.id.btn_cancel)
+        buttonRetry = view.findViewById(R.id.btn_retry)
+        buttonSpaceBar = view.findViewById(R.id.btn_space_bar)
+        buttonBackspace = view.findViewById(R.id.btn_backspace)
+        labelStatus = view.findViewById(R.id.label_status)
+        labelHint = view.findViewById(R.id.label_hint)
+        waitingIcon = view.findViewById(R.id.pb_waiting_icon)
+        amplitudeRing = view.findViewById(R.id.mic_amplitude_ring)
+        buttonMic?.setOnClickListener {
+            when (keyboardStatus) {
+                KeyboardStatus.Idle -> tryStartRecording()
+                KeyboardStatus.Recording -> tryStartTranscribing("")
+                KeyboardStatus.Transcribing -> Unit
+            }
+        }
+        buttonCancel?.setOnClickListener { cancelActiveOperation() }
+        buttonRetry?.setOnClickListener {
+            // Only an error in this session plus a private current file may expose retry.
+            if (!sensitiveInput && keyboardStatus == KeyboardStatus.Idle && errorMessage != null && shouldShowRetry()) {
+                errorMessage = null
+                setKeyboardStatus(KeyboardStatus.Transcribing)
+                this.onStartTranscribing("")
+            }
+        }
+        buttonSpaceBar?.setOnClickListener {
+            if (keyboardStatus == KeyboardStatus.Recording) tryStartTranscribing(" ")
+            else if (keyboardStatus == KeyboardStatus.Idle) onSpaceBar()
+        }
+        buttonEnter?.setOnClickListener {
+            if (keyboardStatus == KeyboardStatus.Recording) tryStartTranscribing("\r\n")
+            else if (keyboardStatus == KeyboardStatus.Idle) onEnter()
+        }
+        buttonBackspace?.setBackspaceCallback(onButtonBackspace)
+        view.findViewById<ImageButton>(R.id.btn_settings).setOnClickListener {
+            buttonBackspace?.stopRepeating()
+            onOpenSettings()
+        }
+        view.findViewById<ImageButton>(R.id.btn_previous_ime).apply {
+            visibility = if (shouldOfferImeSwitch) View.VISIBLE else View.GONE
+            setOnClickListener {
+                buttonBackspace?.stopRepeating()
+                onSwitchIme()
+            }
+        }
         reset()
-
-        // Returns the keyboard view (non-nullable)
-        return keyboardView!!
+        return view
     }
 
+    /** Clear any previous-editor error and stop repeating deletion when the IME hides/resets. */
     fun reset() {
+        buttonBackspace?.stopRepeating()
+        errorMessage = null
+        setKeyboardStatus(KeyboardStatus.Idle)
+    }
+
+    /** The service must call this before considering auto-record in a new editor. */
+    fun setSensitiveInput(sensitive: Boolean) {
+        sensitiveInput = sensitive
+        if (sensitive) {
+            cancelActiveOperation()
+            errorMessage = null
+            buttonBackspace?.stopRepeating()
+        }
+        render()
+    }
+
+    /** Accepts a sanitized, user-facing message, never a raw server body or exception. */
+    fun showError(message: String) {
+        errorMessage = message.take(180).ifBlank {
+            keyboardView?.context?.getString(R.string.keyboard_error).orEmpty()
+        }
         setKeyboardStatus(KeyboardStatus.Idle)
     }
 
     fun updateMicrophoneAmplitude(amplitude: Int) {
-        if (keyboardStatus != KeyboardStatus.Recording) {
-            return
-        }
-
-        val clampedAmplitude = MathUtils.clamp(
-            amplitude,
-            AMPLITUDE_CLAMP_MIN,
-            AMPLITUDE_CLAMP_MAX
-        )
-
-        // decibel-like calculation
-        val normalizedPower =
-            (log10(clampedAmplitude * 1f) - LOG_10_10) / (LOG_10_25000 - LOG_10_10)
-
-        // normalizedPower ranges from 0 to 1.
-        // The inner-most ripple should be the most sensitive to audio,
-        // represented by a gamma-correction-like curve.
-        for (micRippleIdx in micRipples.indices) {
-            micRipples[micRippleIdx].clearAnimation()
-            micRipples[micRippleIdx].alpha = normalizedPower.pow(amplitudePowers[micRippleIdx])
-            micRipples[micRippleIdx].animate().alpha(0f).setDuration(AMPLITUDE_ANIMATION_DURATION)
-                .start()
+        if (keyboardStatus != KeyboardStatus.Recording || sensitiveInput) return
+        val level = ((log10(amplitude.coerceIn(10, 25000).toFloat()) - 1f) / 3.398f).coerceIn(0f, 1f)
+        amplitudeRing?.apply {
+            animate().cancel()
+            alpha = 0.15f + 0.65f * level
+            scaleX = 0.88f + 0.12f * level
+            scaleY = scaleX
+            animate().alpha(0.15f).setDuration(300L).start()
         }
     }
 
     fun tryStartRecording() {
-        if (keyboardStatus == KeyboardStatus.Idle) {
-            setKeyboardStatus(KeyboardStatus.Recording)
-            onStartRecording()
-        }
+        if (keyboardView == null || sensitiveInput || keyboardStatus != KeyboardStatus.Idle) return
+        errorMessage = null
+        setKeyboardStatus(KeyboardStatus.Recording)
+        onStartRecording()
     }
 
     fun tryCancelRecording() {
-        if (keyboardStatus == KeyboardStatus.Recording) {
-            setKeyboardStatus(KeyboardStatus.Idle)
-            onCancelRecording()
-        }
+        if (keyboardStatus != KeyboardStatus.Recording) return
+        setKeyboardStatus(KeyboardStatus.Idle)
+        onCancelRecording()
     }
 
     fun tryStartTranscribing(attachToEnd: String) {
-        if (keyboardStatus == KeyboardStatus.Recording) {
-            setKeyboardStatus(KeyboardStatus.Transcribing)
-            onStartTranscribing(attachToEnd)
+        if (sensitiveInput || keyboardStatus != KeyboardStatus.Recording) return
+        setKeyboardStatus(KeyboardStatus.Transcribing)
+        onStartTranscribing(attachToEnd)
+    }
+
+    private fun cancelActiveOperation() {
+        val previous = keyboardStatus
+        errorMessage = null
+        setKeyboardStatus(KeyboardStatus.Idle)
+        when (previous) {
+            KeyboardStatus.Recording -> onCancelRecording()
+            KeyboardStatus.Transcribing -> onCancelTranscribing()
+            KeyboardStatus.Idle -> Unit
         }
     }
 
-    private fun onButtonSpaceBarClick() {
-        // Upon button space bar click.
-        // Recording -> Start transcribing (with a whitespace included)
-        // else -> invokes onSpaceBar
-        if (keyboardStatus == KeyboardStatus.Recording) {
-            setKeyboardStatus(KeyboardStatus.Transcribing)
-            onStartTranscribing(" ")
-        } else {
-            onSpaceBar()
+    private fun setKeyboardStatus(status: KeyboardStatus) {
+        keyboardStatus = status
+        render()
+    }
+
+    private fun render() {
+        val view = keyboardView ?: return
+        val context = view.context
+        val recording = keyboardStatus == KeyboardStatus.Recording
+        val transcribing = keyboardStatus == KeyboardStatus.Transcribing
+        val active = recording || transcribing
+        val status = when {
+            sensitiveInput -> R.string.keyboard_sensitive
+            recording -> R.string.recording
+            transcribing -> R.string.transcribing
+            errorMessage != null -> R.string.keyboard_error
+            else -> R.string.keyboard_ready
         }
-    }
-
-    private fun onButtonBackspaceClick() {
-        // Currently, this onClick only makes a call to onButtonBackspace()
-        this.onButtonBackspace()
-    }
-
-    private fun onButtonPreviousImeClick() {
-        // Currently, this onClick only makes a call to onSwitchIme()
-        this.onSwitchIme()
-    }
-
-    private fun onButtonSettingsClick() {
-        // Currently, this onClick only makes a call to onOpenSettings()
-        this.onOpenSettings()
-    }
-
-    private fun onButtonMicClick() {
-        // Upon button mic click...
-        // Idle -> Start Recording
-        // Recording -> Finish Recording (without a newline)
-        // Transcribing -> Nothing (to avoid double-clicking by mistake, which starts transcribing and then immediately cancels it)
-        when (keyboardStatus) {
-            KeyboardStatus.Idle -> {
-                setKeyboardStatus(KeyboardStatus.Recording)
-                onStartRecording()
-            }
-
-            KeyboardStatus.Recording -> {
-                setKeyboardStatus(KeyboardStatus.Transcribing)
-                onStartTranscribing("")
-            }
-
-            KeyboardStatus.Transcribing -> {
-                return
-            }
+        val hint = when {
+            sensitiveInput -> context.getString(R.string.keyboard_sensitive_hint)
+            recording -> context.getString(R.string.keyboard_recording_hint)
+            transcribing -> context.getString(R.string.keyboard_transcribing_hint)
+            errorMessage != null -> errorMessage
+            else -> context.getString(R.string.keyboard_ready_hint)
         }
-    }
-
-    private fun onButtonEnterClick() {
-        // Upon button enter click.
-        // Recording -> Start transcribing (with a newline included)
-        // else -> invokes onEnter
-        if (keyboardStatus == KeyboardStatus.Recording) {
-            setKeyboardStatus(KeyboardStatus.Transcribing)
-            onStartTranscribing("\r\n")
-        } else {
-            onEnter()
+        labelStatus?.setText(status)
+        labelHint?.text = hint
+        buttonMic?.apply {
+            isEnabled = !sensitiveInput && !transcribing
+            alpha = if (sensitiveInput) 0.38f else 1f
+            setImageResource(if (recording) R.drawable.ic_dictation_stop else R.drawable.ic_dictation_mic)
+            imageAlpha = if (transcribing) 0 else 255
+            contentDescription = context.getString(when {
+                sensitiveInput -> R.string.keyboard_sensitive
+                recording -> R.string.stop_speech_to_text
+                transcribing -> R.string.transcribing
+                else -> R.string.start_speech_to_text
+            })
         }
-    }
-
-    private fun onButtonCancelClick() {
-        // Upon button cancel click.
-        // Recording -> Cancel
-        // Transcribing -> Cancel
-        // else -> nothing
-        if (keyboardStatus == KeyboardStatus.Recording) {
-            setKeyboardStatus(KeyboardStatus.Idle)
-            onCancelRecording()
-        } else if (keyboardStatus == KeyboardStatus.Transcribing) {
-            setKeyboardStatus(KeyboardStatus.Idle)
-            onCancelTranscribing()
+        waitingIcon?.visibility = if (transcribing) View.VISIBLE else View.GONE
+        buttonCancel?.visibility = if (active && !sensitiveInput) View.VISIBLE else View.INVISIBLE
+        buttonRetry?.apply {
+            val available = !sensitiveInput && !active && errorMessage != null && shouldShowRetry()
+            visibility = if (available) View.VISIBLE else View.INVISIBLE
+            isEnabled = available
         }
-    }
-
-    private fun onButtonRetryClick() {
-        // Upon button retry click.
-        // Idle -> Retry
-        // else -> nothing
-        if (keyboardStatus == KeyboardStatus.Idle) {
-            setKeyboardStatus(KeyboardStatus.Transcribing)
-            onStartTranscribing("")
+        buttonEnter?.apply {
+            isEnabled = !transcribing
+            alpha = if (transcribing) 0.38f else 1f
+            contentDescription = context.getString(if (recording) R.string.transcribe_enter else R.string.enter_key)
         }
-    }
-
-    private fun setKeyboardStatus(newStatus: KeyboardStatus) {
-        when (newStatus) {
-            KeyboardStatus.Idle -> {
-                labelStatus!!.setText(R.string.whisper_to_input)
-                buttonMic!!.setImageResource(R.drawable.mic_idle)
-                waitingIcon!!.visibility = View.INVISIBLE
-                buttonCancel!!.visibility = View.INVISIBLE
-                buttonRetry!!.visibility = if (shouldShowRetry()) View.VISIBLE else View.INVISIBLE
-                micRippleContainer!!.visibility = View.GONE
-                keyboardView!!.keepScreenOn = false
-            }
-
-            KeyboardStatus.Recording -> {
-                labelStatus!!.setText(R.string.recording)
-                buttonMic!!.setImageResource(R.drawable.mic_pressed)
-                waitingIcon!!.visibility = View.INVISIBLE
-                buttonCancel!!.visibility = View.VISIBLE
-                buttonRetry!!.visibility = View.INVISIBLE
-                micRippleContainer!!.visibility = View.VISIBLE
-                keyboardView!!.keepScreenOn = true
-            }
-
-            KeyboardStatus.Transcribing -> {
-                labelStatus!!.setText(R.string.transcribing)
-                buttonMic!!.setImageResource(R.drawable.mic_transcribing)
-                waitingIcon!!.visibility = View.VISIBLE
-                buttonCancel!!.visibility = View.VISIBLE
-                buttonRetry!!.visibility = View.INVISIBLE
-                micRippleContainer!!.visibility = View.GONE
-                keyboardView!!.keepScreenOn = true
-            }
+        buttonSpaceBar?.apply {
+            isEnabled = !transcribing
+            alpha = if (transcribing) 0.38f else 1f
+            contentDescription = context.getString(if (recording) R.string.transcribe_space else R.string.desc_space_bar)
         }
-
-        keyboardStatus = newStatus
+        amplitudeRing?.apply {
+            if (!recording || sensitiveInput) animate().cancel()
+            visibility = if (recording && !sensitiveInput) View.VISIBLE else View.INVISIBLE
+            if (!recording) { alpha = 0.15f; scaleX = 1f; scaleY = 1f }
+        }
+        view.keepScreenOn = active && !sensitiveInput
     }
 }

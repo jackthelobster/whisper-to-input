@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="dark_gray">#FF777777</color>
-    <color name="theme_light_grey">#d9d9d9</color>
-    <color name="theme_rich_black">#FF001A23</color>
+    <color name="app_primary">#006A64</color>
+    <color name="app_on_primary">#FFFFFF</color>
+    <color name="app_primary_container">#B4F1E7</color>
+    <color name="app_on_primary_container">#00201D</color>
+    <color name="app_background">#F4F8F7</color>
+    <color name="app_surface">#FFFFFF</color>
+    <color name="app_surface_variant">#E6EEEB</color>
+    <color name="app_on_surface">#182321</color>
+    <color name="app_on_surface_variant">#475955</color>
+    <color name="app_outline">#718581</color>
+    <color name="app_error">#BA1A1A</color>
+    <color name="app_ripple">#26006A64</color>
+    <color name="dark_gray">@color/app_on_surface_variant</color>
+    <color name="theme_light_grey">@color/app_background</color>
+    <color name="theme_rich_black">@color/app_on_surface</color>
 </resources>

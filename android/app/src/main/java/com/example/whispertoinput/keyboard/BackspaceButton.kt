@@ -20,72 +20,107 @@
 package com.example.whispertoinput.keyboard
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
-import android.util.Log
-import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.View
 import androidx.appcompat.widget.AppCompatImageButton
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
-private const val QUICK_BACKSPACE_DELAY: Long = 80
-private const val DELAY_BEFORE_QUICK_BACKSPACE: Long = 600
+private const val QUICK_BACKSPACE_DELAY = 80L
+private const val DELAY_BEFORE_QUICK_BACKSPACE = 500L
 
-class BackspaceButton(context: Context, attrs: AttributeSet) :
-    AppCompatImageButton(context, attrs) {
-
-    fun setBackspaceCallback(callback: () -> Unit) {
-        backspaceCallback = callback
-        setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    performClick()
-                    startLongPressDetector()
-                }
-
-                MotionEvent.ACTION_UP -> abortLongPressDetector()
+/** Repeat is owned by this visible view, never by a free-floating coroutine. */
+class BackspaceButton @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = androidx.appcompat.R.attr.imageButtonStyle,
+) : AppCompatImageButton(context, attrs, defStyleAttr) {
+    private val repeatHandler = Handler(Looper.getMainLooper())
+    private var backspaceCallback: () -> Unit = {}
+    private var repeating = false
+    private val repeatAction = object : Runnable {
+        override fun run() {
+            if (!repeating || !isPressed || !isEnabled || !isShown || !hasWindowFocus()) {
+                stopRepeating()
+                return
             }
-            true
+            backspaceCallback()
+            repeatHandler.postDelayed(this, QUICK_BACKSPACE_DELAY)
         }
     }
 
-    // Override this for accessibility.
-    // performClick() will be called either in appropriate touch events,
-    // or when accessibility tools demand its invocation
+    fun setBackspaceCallback(callback: () -> Unit) {
+        stopRepeating()
+        backspaceCallback = callback
+        isClickable = true
+        isFocusable = true
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!isEnabled) { stopRepeating(); return false }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                stopRepeating()
+                isPressed = true
+                performClick()
+                if (isPressed && isShown && isEnabled && hasWindowFocus()) {
+                    repeating = true
+                    repeatHandler.postDelayed(repeatAction, DELAY_BEFORE_QUICK_BACKSPACE)
+                }
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (event.x < 0 || event.x >= width || event.y < 0 || event.y >= height) stopRepeating()
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                stopRepeating()
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    // TalkBack, keyboard and switch access call exactly the same one-delete action.
     override fun performClick(): Boolean {
+        if (!isEnabled) return false
         super.performClick()
         backspaceCallback()
         return true
     }
 
-    // Starts a job that periodically performs backspace
-    private fun startLongPressDetector() {
-        longPressDetectorJob?.cancel()
-        longPressDetectorJob = CoroutineScope(Dispatchers.Main).launch {
-            // Long Press: delay for a while before actually starting
-            //   quick backspace. Any ACTION_UP will terminate either
-            //   the waiting or quick backspacing.
-            delay(DELAY_BEFORE_QUICK_BACKSPACE)
-            while (this.isActive) {
-                backspaceCallback()
-                delay(QUICK_BACKSPACE_DELAY)
-            }
-        }
+    fun stopRepeating() {
+        repeating = false
+        repeatHandler.removeCallbacks(repeatAction)
+        isPressed = false
     }
 
-    // Aborts any currently running quick backspace job.
-    private fun abortLongPressDetector() {
-        longPressDetectorJob?.cancel()
-        longPressDetectorJob = null
+    override fun onDetachedFromWindow() {
+        stopRepeating()
+        super.onDetachedFromWindow()
     }
 
-    // Stores the callback when a backspace should be performed
-    private var backspaceCallback: () -> Unit = { }
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        // View constructors may dispatch this before Kotlin field initialization.
+        if (visibility != View.VISIBLE) stopRepeatingSafely()
+    }
 
-    // Stores the currently running long press detector job
-    private var longPressDetectorJob: Job? = null
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != View.VISIBLE) stopRepeatingSafely()
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) stopRepeatingSafely()
+    }
+
+    private fun stopRepeatingSafely() {
+        // Avoid touching the handler until the subclass constructor has completed.
+        if (initialized) stopRepeating()
+    }
+
+    private var initialized = true
 }

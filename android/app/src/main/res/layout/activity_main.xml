@@ -1,218 +1,214 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-
     This file is part of Whisper To Input, see <https://github.com/j3soon/whisper-to-input>.
-
     Copyright (c) 2023-2025 Yan-Bin Diau, Johnson Sun
-
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-
     This program is distributed in the hope that it will be useful, but
     WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
     GNU General Public License for more details.
-
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <https://www.gnu.org/licenses/>.
-
 -->
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/linearLayout"
+    android:id="@+id/settings_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:background="@color/app_background"
+    android:fitsSystemWindows="true">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        style="@style/Background"
+    <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/settings_top_bar"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:background="@color/app_background"
+        app:title="@string/whisper_to_input"
+        app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/settings_scroll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:fillViewport="true"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:paddingTop="4dp"
+        android:paddingBottom="16dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <TextView
-            style="@style/RegularText"
-            android:id="@+id/settings_title"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:gravity="bottom"
-            android:text="@string/whisper_to_input_settings_title"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/btn_settings_apply"
-            app:layout_constraintHorizontal_bias="0.0"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <Button
-            android:id="@+id/btn_settings_apply"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:layout_weight="1"
-            android:text="@string/settings_btn_apply"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:padding="24dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/settings_top_bar">
-
+        app:layout_constraintTop_toBottomOf="@id/settings_top_bar"
+        app:layout_constraintBottom_toTopOf="@id/settings_bottom_bar">
         <LinearLayout
-            android:id="@+id/settings_list"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingBottom="64dp"
-            android:minHeight="100dp"
-            android:orientation="vertical" >
-
-            <!-- Speech to Text Backend -->
+            android:orientation="vertical">
             <TextView
-                android:id="@+id/label_speech_to_text_backend"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_speech_to_text_backend" />
-            <TextView
-                android:id="@+id/description_speech_to_text_backend"
                 style="@style/SettingsDescription"
-                android:text="@string/settings_speech_to_text_backend_desc" />
-            <Spinner
-                android:id="@+id/spinner_speech_to_text_backend"
-                style="@style/SettingsSpinner"
-                android:entries="@array/settings_speech_to_text_backend_array" />
+                android:layout_marginBottom="16dp"
+                android:text="@string/settings_intro" />
 
-            <!-- Endpoint -->
-            <TextView
-                android:id="@+id/label_endpoint"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_endpoint" />
-            <TextView
-                android:id="@+id/description_endpoint"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_endpoint_desc" />
-            <EditText
-                android:id="@+id/field_endpoint"
-                style="@style/SettingsField"
-                android:hint="@string/settings_endpoint_hint" />
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout style="@style/CardContents">
+                    <TextView android:id="@+id/setup_heading" style="@style/SettingsLabel" android:text="@string/setup_title" />
+                    <TextView style="@style/SettingsDescription" android:text="@string/setup_description" />
+                    <TextView android:id="@+id/microphone_status" style="@style/SetupStatus" android:text="@string/microphone_needed" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_permission"
+                        style="@style/SetupButton"
+                        android:text="@string/grant_microphone_permission"
+                        app:icon="@drawable/ic_dictation_mic" />
+                    <TextView android:id="@+id/keyboard_status" style="@style/SetupStatus" android:text="@string/keyboard_not_enabled" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_enable_keyboard"
+                        style="@style/SetupButton"
+                        android:text="@string/enable_keyboard"
+                        app:icon="@drawable/ic_dictation_keyboard" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_choose_keyboard"
+                        style="@style/SetupButton"
+                        android:text="@string/choose_keyboard"
+                        app:icon="@drawable/ic_dictation_switch" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-            <!-- API Key -->
-            <TextView
-                android:id="@+id/label_api_key"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_api_key" />
-            <TextView
-                android:id="@+id/description_api_key"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_api_key_desc" />
-            <EditText
-                android:id="@+id/field_api_key"
-                style="@style/SettingsField"
-                android:hint="@string/settings_api_key_hint" />
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout style="@style/CardContents">
+                    <TextView android:id="@+id/server_heading" style="@style/SettingsLabel" android:text="@string/server_title" />
+                    <TextView style="@style/SettingsDescription" android:text="@string/server_description" />
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_endpoint"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_endpoint"
+                        app:helperText="@string/settings_endpoint_desc">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_endpoint"
+                            style="@style/SettingsField"
+                            android:inputType="textUri"
+                            android:imeOptions="actionNext"
+                            android:maxLines="3" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_model"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_model">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_model"
+                            style="@style/SettingsField"
+                            android:inputType="textNoSuggestions"
+                            android:imeOptions="actionNext"
+                            android:maxLines="2" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_language"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_language_code"
+                        app:helperText="@string/settings_language_code_desc">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_language_code"
+                            style="@style/SettingsField"
+                            android:inputType="textNoSuggestions"
+                            android:imeOptions="actionNext"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_api_key"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_api_key"
+                        android:importantForAutofill="noExcludeDescendants"
+                        android:saveEnabled="false"
+                        app:helperText="@string/settings_api_key_desc">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_api_key"
+                            style="@style/SettingsField"
+                            android:inputType="textPassword"
+                            android:imeOptions="actionDone|flagNoPersonalizedLearning"
+                            android:importantForAutofill="noExcludeDescendants"
+                            android:saveEnabled="false"
+                            android:singleLine="true" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_allow_insecure"
+                        style="@style/SettingsSwitch"
+                        android:text="@string/allow_insecure" />
+                    <TextView
+                        style="@style/SettingsDescription"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="8dp"
+                        android:text="@string/http_warning" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_test_connection"
+                        style="@style/SetupButton"
+                        android:text="@string/test_connection"
+                        app:icon="@drawable/ic_dictation_connection" />
+                    <TextView
+                        android:id="@+id/connection_result"
+                        style="@style/SettingsDescription"
+                        android:layout_marginTop="8dp"
+                        android:accessibilityLiveRegion="polite"
+                        android:visibility="gone" />
+                    <TextView
+                        style="@style/SettingsDescription"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/test_connection_description" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-            <!-- Model -->
-            <TextView
-                android:id="@+id/label_model"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_model" />
-            <TextView
-                android:id="@+id/description_model"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_model_desc" />
-            <EditText
-                android:id="@+id/field_model"
-                style="@style/SettingsField"
-                android:hint="@string/settings_model_hint" />
-
-            <!-- Language Code -->
-            <TextView
-                android:id="@+id/label_language_code"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_language_code" />
-            <TextView
-                android:id="@+id/description_language_code"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_language_code_desc" />
-            <EditText
-                android:id="@+id/field_language_code"
-                style="@style/SettingsField"
-                android:hint="@string/settings_language_code_hint" />
-
-            <!-- Auto Recording Start -->
-            <TextView
-                android:id="@+id/label_auto_recording_start"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_auto_recording_start" />
-            <TextView
-                android:id="@+id/description_auto_recording_start"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_auto_recording_start_desc" />
-            <Spinner
-                android:id="@+id/spinner_auto_recording_start"
-                style="@style/SettingsSpinner"
-                android:entries="@array/settings_auto_recording_start_array" />
-
-            <!-- Auto Switch Back -->
-            <TextView
-                android:id="@+id/label_auto_switch_back"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_auto_switch_back" />
-            <TextView
-                android:id="@+id/description_auto_switch_back"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_auto_switch_back_desc" />
-            <Spinner
-                android:id="@+id/spinner_auto_switch_back"
-                style="@style/SettingsSpinner"
-                android:entries="@array/settings_auto_switch_back_array" />
-
-            <!-- Postprocessing -->
-            <TextView
-                android:id="@+id/label_postprocessing"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_postprocessing" />
-            <TextView
-                android:id="@+id/description_postprocessing"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_postprocessing_desc" />
-            <Spinner
-                android:id="@+id/spinner_postprocessing"
-                style="@style/SettingsSpinner"
-                android:entries="@array/settings_postprocessing_array" />
-
-            <!-- Add Trailing Space -->
-            <TextView
-                android:id="@+id/label_add_trailing_space"
-                style="@style/SettingsLabel"
-                android:text="@string/settings_add_trailing_space" />
-            <TextView
-                android:id="@+id/description_add_trailing_space"
-                style="@style/SettingsDescription"
-                android:text="@string/settings_add_trailing_space_desc" />
-            <Spinner
-                android:id="@+id/spinner_add_trailing_space"
-                style="@style/SettingsSpinner"
-                android:entries="@array/settings_add_trailing_space_array" />
-
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout style="@style/CardContents">
+                    <TextView android:id="@+id/behavior_heading" style="@style/SettingsLabel" android:text="@string/behavior_title" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_auto_record"
+                        style="@style/SettingsSwitch"
+                        android:text="@string/settings_auto_recording_start" />
+                    <TextView style="@style/SettingsDescription" android:text="@string/settings_auto_recording_start_desc" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_auto_switch"
+                        style="@style/SettingsSwitch"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/settings_auto_switch_back" />
+                    <TextView style="@style/SettingsDescription" android:text="@string/settings_auto_switch_back_desc" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_trailing_space"
+                        style="@style/SettingsSwitch"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/settings_add_trailing_space" />
+                    <TextView style="@style/SettingsDescription" android:text="@string/settings_add_trailing_space_desc" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
-
+    <LinearLayout
+        android:id="@+id/settings_bottom_bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/app_surface"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_settings_apply"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:enabled="false"
+            android:text="@string/settings_btn_apply"
+            android:textAllCaps="false"
+            app:cornerRadius="16dp"
+            app:icon="@drawable/ic_dictation_check" />
+    </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

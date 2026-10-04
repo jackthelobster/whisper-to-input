@@ -1,0 +1,45 @@
+{
+  "scope": "Selected runtime packages only; not a full transitive audit or certification. OSV query date 2026-10-03.",
+  "results": [
+    {
+      "package": "com.squareup.okhttp3:okhttp",
+      "version": "4.12.0",
+      "advisories": []
+    },
+    {
+      "package": "com.squareup.okio:okio",
+      "version": "3.6.0",
+      "advisories": []
+    },
+    {
+      "package": "org.jetbrains.kotlinx:kotlinx-coroutines-core",
+      "version": "1.7.3",
+      "advisories": []
+    },
+    {
+      "package": "org.jetbrains.kotlin:kotlin-stdlib",
+      "version": "1.9.24",
+      "advisories": []
+    },
+    {
+      "package": "com.google.android.material:material",
+      "version": "1.12.0",
+      "advisories": []
+    },
+    {
+      "package": "androidx.appcompat:appcompat",
+      "version": "1.7.0",
+      "advisories": []
+    },
+    {
+      "package": "androidx.core:core-ktx",
+      "version": "1.13.1",
+      "advisories": []
+    },
+    {
+      "package": "androidx.datastore:datastore-preferences",
+      "version": "1.1.1",
+      "advisories": []
+    }
+  ]
+}

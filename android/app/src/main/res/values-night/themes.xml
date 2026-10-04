@@ -1,24 +1,22 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+<resources>
     <style name="Base.Theme.WhisperToInput" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <item name="colorPrimary">@color/app_primary</item>
+        <item name="colorOnPrimary">@color/app_on_primary</item>
+        <item name="colorPrimaryContainer">@color/app_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/app_on_primary_container</item>
+        <item name="colorSecondary">@color/app_primary</item>
+        <item name="colorOnSecondary">@color/app_on_primary</item>
+        <item name="colorSurface">@color/app_surface</item>
+        <item name="colorOnSurface">@color/app_on_surface</item>
+        <item name="colorSurfaceVariant">@color/app_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/app_on_surface_variant</item>
+        <item name="colorOutline">@color/app_outline</item>
+        <item name="colorError">@color/app_error</item>
+        <item name="android:colorBackground">@color/app_background</item>
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:statusBarColor">@color/app_background</item>
+        <item name="android:navigationBarColor">@color/app_surface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:fontFamily">sans-serif</item>
     </style>
-
-    <style name="RegularImage">
-        <item name="android:tint">#AAA</item>
-    </style>
-
-    <style name="RegularText">
-        <item name="android:textColor">#AAA</item>
-    </style>
-
-    <style name="Background">
-        <item name="android:background">#373737</item>
-    </style>
-
-    <style name="TopBar">
-        <item name="android:background">#AAAAAA</item>
-    </style>
-
 </resources>
