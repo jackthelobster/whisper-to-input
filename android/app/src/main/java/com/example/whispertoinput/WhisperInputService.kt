@@ -300,12 +300,9 @@ class WhisperInputService : InputMethodService() {
                         // The transcriber emits callback(null) before its error callback; let
                         // that error path finish the request instead of treating it as empty speech.
                         if (text == null) return@launch
-                        val committed = !text.isNullOrBlank() && runCatching {
-                            session.connection.commitText(text, 1)
-                        }.getOrDefault(false)
+                        val committed = EditorOperations.commitTranscription(session.connection, text, audio)
                         if (committed) {
                             session.transcribing = false
-                            audio.delete()
                             session.audio = null
                             resetKeyboard()
                             if (session.settings?.autoSwitch == true && isCurrentDictationTarget(session)) {
@@ -366,17 +363,7 @@ class WhisperInputService : InputMethodService() {
         val session = activeSession ?: return
         if (!isCurrentTarget(session)) return
         session.userInteracted = true
-        // Only inspect selection to implement deletion; never read surrounding editor contents.
-        val selectedText = session.connection.getSelectedText(0)
-        if (selectedText.isNullOrEmpty()) {
-            if (Build.VERSION.SDK_INT >= 24) {
-                session.connection.deleteSurroundingTextInCodePoints(1, 0)
-            } else {
-                session.connection.deleteSurroundingText(1, 0)
-            }
-        } else {
-            session.connection.commitText("", 1)
-        }
+        EditorOperations.deleteBackward(session.connection)
     }
 
     private fun onEnter() {

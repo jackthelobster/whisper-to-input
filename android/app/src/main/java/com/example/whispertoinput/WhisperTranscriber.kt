@@ -60,8 +60,9 @@ class WhisperTranscriber {
                         val settings = SettingsRepository(application).load()
                         val text = client.transcribe(settings, audio, mediaType)
                         coroutineContext.ensureActive()
-                        val operation = coroutineContext[Job]!!
-                        lease.deleteAfterSuccess { operation.isActive }
+                        // HTTP success is not editor insertion success. The service owns deletion
+                        // after commitText succeeds (or the user cancels/leaves the editor), so keep
+                        // this recording available for retry even after this job releases its lease.
                         text + when {
                             attachToEnd.isNotEmpty() -> attachToEnd
                             settings.trailingSpace -> " "

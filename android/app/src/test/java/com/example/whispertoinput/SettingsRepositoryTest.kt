@@ -15,9 +15,13 @@ import org.junit.Test
 class SettingsRepositoryTest {
     private class MemoryStore(initial: Preferences = emptyPreferences()) : DataStore<Preferences> {
         val state = MutableStateFlow(initial)
+        var updates = 0
+        var failUpdate: Int? = null
         private val mutex = Mutex()
         override val data: Flow<Preferences> = state
         override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences = mutex.withLock {
+            updates++
+            if (updates == failUpdate) error("private settings failure")
             transform(state.value).also { state.value = it }
         }
     }
@@ -44,6 +48,21 @@ class SettingsRepositoryTest {
         }
     }
 
+    private suspend fun assertRecoveryRequired(store: MemoryStore, credentials: MemoryCredentials) {
+        assertNull(store.state.value[API_KEY])
+        assertEquals(true, store.state.value[CREDENTIAL_RECOVERY_REQUIRED])
+        repeat(3) {
+            try {
+                // New repositories must honor durable state, not just an in-memory failure flag.
+                SettingsRepository(store, credentials).load()
+                fail("Expected explicit credential recovery")
+            } catch (e: TranscriptionException) {
+                assertTrue(e.message!!.contains("Re-enter"))
+                assertFalse(e.message!!.contains("private"))
+            }
+        }
+    }
+
     @Test fun defaultsMatchApprovedEndpointAndSafeUiFlags() = runBlocking {
         val settings = SettingsRepository(MemoryStore(), MemoryCredentials()).load()
         assertEquals(AppSettings.DEFAULT_ENDPOINT, settings.endpoint)
@@ -63,6 +82,7 @@ class SettingsRepositoryTest {
         assertEquals("unit-test-token", repository.load().apiKey)
         assertNull(store.state.value[API_KEY])
         assertEquals("unit-test-token", credentials.value)
+        assertNull(store.state.value[CREDENTIAL_RECOVERY_REQUIRED])
         repository.load()
         assertEquals(1, credentials.writes)
     }
@@ -91,7 +111,89 @@ class SettingsRepositoryTest {
             assertFalse(e.message!!.contains("private credential failure"))
             assertFalse(e.message!!.contains("unit-test-token"))
         }
-        assertNull(store.state.value[API_KEY])
+        assertRecoveryRequired(store, credentials)
+        credentials.failWrite = false
+        assertRecoveryRequired(store, credentials)
+        assertEquals(0, credentials.writes)
+    }
+
+    @Test fun successfulExplicitSaveRecoversFailedMigration() = runBlocking {
+        val store = MemoryStore(preferencesOf(API_KEY to "unit-test-token"))
+        val credentials = MemoryCredentials().apply { failWrite = true }
+        try {
+            SettingsRepository(store, credentials).load()
+            fail("Expected migration failure")
+        } catch (_: TranscriptionException) { }
+        assertRecoveryRequired(store, credentials)
+        credentials.failWrite = false
+        val settings = AppSettings(endpoint = "https://example.test/transcribe", apiKey = "replacement-token")
+        SettingsRepository(store, credentials).save(settings)
+        assertNull(store.state.value[CREDENTIAL_RECOVERY_REQUIRED])
+        assertEquals(settings, SettingsRepository(store, credentials).load())
+    }
+
+    @Test fun failingExplicitRecoveryKeepsLoadsBlocked() = runBlocking {
+        val store = MemoryStore(preferencesOf(API_KEY to "unit-test-token"))
+        val credentials = MemoryCredentials().apply { failWrite = true }
+        val repository = SettingsRepository(store, credentials)
+        try {
+            repository.load()
+            fail("Expected migration failure")
+        } catch (_: TranscriptionException) { }
+        try {
+            repository.save(AppSettings())
+            fail("Expected recovery save failure")
+        } catch (e: TranscriptionException) {
+            assertFalse(e.message!!.contains("private"))
+        }
+        assertRecoveryRequired(store, credentials)
+        credentials.failWrite = false
+        assertRecoveryRequired(store, credentials)
+        repository.save(AppSettings())
+        assertNull(store.state.value[CREDENTIAL_RECOVERY_REQUIRED])
+        assertEquals("", repository.load().apiKey)
+    }
+
+    @Test fun failingExplicitSaveRemovesPlaintextAndBlocksPreviousCredentials() = runBlocking {
+        val store = MemoryStore(preferencesOf(API_KEY to "stale-token"))
+        val credentials = MemoryCredentials("previous-token").apply { failWrite = true }
+        try {
+            SettingsRepository(store, credentials).save(AppSettings())
+            fail("Expected credential save failure")
+        } catch (_: TranscriptionException) { }
+        assertEquals("previous-token", credentials.value)
+        assertRecoveryRequired(store, credentials)
+    }
+
+    @Test fun failedSettingsCommitBlocksEvenWhenCredentialEndpointStillMatches() = runBlocking {
+        val endpoint = "https://example.test/transcribe"
+        val store = MemoryStore(preferencesOf(ENDPOINT to endpoint, API_KEY to "stale-token"))
+            .apply { failUpdate = 2 }
+        val credentials = MemoryCredentials("previous-token")
+        val settings = AppSettings(endpoint = endpoint, apiKey = "", model = "replacement-model")
+        try {
+            SettingsRepository(store, credentials).save(settings)
+            fail("Expected settings commit failure")
+        } catch (e: TranscriptionException) {
+            assertFalse(e.message!!.contains("private"))
+        }
+        assertNull(credentials.value)
+        assertRecoveryRequired(store, credentials)
+        SettingsRepository(store, credentials).save(settings)
+        assertNull(store.state.value[CREDENTIAL_RECOVERY_REQUIRED])
+        assertEquals(settings, SettingsRepository(store, credentials).load())
+    }
+
+    @Test fun failedMigrationCompletionCommitRequiresExplicitRecovery() = runBlocking {
+        val store = MemoryStore(preferencesOf(API_KEY to "unit-test-token")).apply { failUpdate = 2 }
+        val credentials = MemoryCredentials()
+        try {
+            SettingsRepository(store, credentials).load()
+            fail("Expected migration completion failure")
+        } catch (_: TranscriptionException) { }
+        assertEquals("unit-test-token", credentials.value)
+        assertRecoveryRequired(store, credentials)
+        assertEquals(1, credentials.writes)
     }
 
     @Test fun credentialRestoreFailureDoesNotSilentlyReturnAnEmptyKey() = runBlocking {

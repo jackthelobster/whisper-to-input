@@ -21,6 +21,7 @@ val SPEECH_TO_TEXT_BACKEND = stringPreferencesKey("speech-to-text-backend")
 val ENDPOINT = stringPreferencesKey("endpoint")
 val LANGUAGE_CODE = stringPreferencesKey("language-code")
 val API_KEY = stringPreferencesKey("api-key") // Legacy migration only. Never write plaintext here.
+val CREDENTIAL_RECOVERY_REQUIRED = booleanPreferencesKey("credential-recovery-required")
 val MODEL = stringPreferencesKey("model")
 val AUTO_RECORDING_START = booleanPreferencesKey("is-auto-recording-start")
 val AUTO_SWITCH_BACK = booleanPreferencesKey("auto-switch-back")
@@ -41,6 +42,9 @@ class SettingsRepository internal constructor(
         mutex.withLock {
             try {
                 val preferences = store.data.first()
+                if (preferences[CREDENTIAL_RECOVERY_REQUIRED] == true) {
+                    throw TranscriptionException("Saved credentials require recovery. Re-enter and save your settings.")
+                }
                 migrateLegacyKey(preferences)
                 val endpoint = preferences[ENDPOINT]?.takeIf { it.isNotBlank() } ?: DEFAULT_ENDPOINT
                 // The ciphertext and its destination commit together in one preferences file.
@@ -75,12 +79,13 @@ class SettingsRepository internal constructor(
             try {
                 // Once persisting starts, finish both stores even if the UI is destroyed.
                 withContext(NonCancellable) {
-                    try {
-                        credentials.writeBound(settings.apiKey, settings.endpoint)
-                    } finally {
-                        // Including empty legacy keys and encryption failure: never keep plaintext.
-                        store.edit { it.remove(API_KEY) }
+                    // Commit recovery state and remove plaintext before touching credentials.
+                    // Any failure or crash must block later loads, including anonymous saves.
+                    store.edit {
+                        it[CREDENTIAL_RECOVERY_REQUIRED] = true
+                        it.remove(API_KEY)
                     }
+                    credentials.writeBound(settings.apiKey, settings.endpoint)
                     store.edit {
                         it[ENDPOINT] = settings.endpoint
                         it[MODEL] = settings.model
@@ -89,6 +94,7 @@ class SettingsRepository internal constructor(
                         it[AUTO_SWITCH_BACK] = settings.autoSwitch
                         it[ADD_TRAILING_SPACE] = settings.trailingSpace
                         it[ALLOW_INSECURE] = settings.allowInsecure
+                        it.remove(CREDENTIAL_RECOVERY_REQUIRED)
                     }
                 }
             } catch (e: CancellationException) {
@@ -102,13 +108,14 @@ class SettingsRepository internal constructor(
     private suspend fun migrateLegacyKey(preferences: Preferences) {
         val legacy = preferences[API_KEY] ?: return
         withContext(NonCancellable) {
-            try {
-                // Existing encrypted credentials win; an old plaintext value must not overwrite them.
-                if (!credentials.contains()) credentials.writeBound(legacy,
-                    preferences[ENDPOINT]?.takeIf { it.isNotBlank() } ?: DEFAULT_ENDPOINT)
-            } finally {
-                store.edit { it.remove(API_KEY) }
+            store.edit {
+                it[CREDENTIAL_RECOVERY_REQUIRED] = true
+                it.remove(API_KEY)
             }
+            // Existing encrypted credentials win; an old plaintext value must not overwrite them.
+            if (!credentials.contains()) credentials.writeBound(legacy,
+                preferences[ENDPOINT]?.takeIf { it.isNotBlank() } ?: DEFAULT_ENDPOINT)
+            store.edit { it.remove(CREDENTIAL_RECOVERY_REQUIRED) }
         }
     }
 
