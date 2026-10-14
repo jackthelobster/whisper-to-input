@@ -139,7 +139,7 @@ class ExampleInstrumentedTest {
                     assertTrue("Settings screen must protect secrets from screenshots", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                     capture(activity.findViewById(android.R.id.content), activity.getExternalFilesDir(null)!!, "settings-$label")
                     val keyboard = WhisperKeyboard()
-                    val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {}, {}, {}, { false })
+                    val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {}, {}, {}, { true })
                     activity.setContentView(view)
                     view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
                     view.layout(0, 0, view.measuredWidth, view.measuredHeight)
@@ -151,6 +151,7 @@ class ExampleInstrumentedTest {
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-listening-$label")
                     keyboard.reset()
                     keyboard.showError("Transcription failed. Tap retry to try again.")
+                    assertEquals(View.VISIBLE, view.findViewById<View>(R.id.btn_retry).visibility)
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-retry-$label")
                     keyboard.reset()
                 }
