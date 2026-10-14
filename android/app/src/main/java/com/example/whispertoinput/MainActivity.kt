@@ -53,6 +53,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: SettingsRepository
     private lateinit var endpoint: TextInputEditText
     private lateinit var fallbackEndpoint: TextInputEditText
+    private lateinit var fallbackModel: TextInputEditText
+    private lateinit var fallbackLanguage: TextInputEditText
     private lateinit var fallbackApiKey: TextInputEditText
     private lateinit var model: TextInputEditText
     private lateinit var language: TextInputEditText
@@ -87,13 +89,15 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightNavigationBars =
             resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK !=
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
-        listOf(R.id.setup_heading, R.id.server_heading, R.id.behavior_heading).forEach {
+        listOf(R.id.setup_heading, R.id.server_heading, R.id.fallback_server_heading, R.id.behavior_heading).forEach {
             ViewCompat.setAccessibilityHeading(findViewById(it), true)
         }
         repository = SettingsRepository(applicationContext)
         endpoint = findViewById(R.id.field_endpoint)
         fallbackEndpoint = findViewById(R.id.field_fallback_endpoint)
         fallbackApiKey = findViewById(R.id.field_fallback_api_key)
+        fallbackModel = findViewById(R.id.field_fallback_model)
+        fallbackLanguage = findViewById(R.id.field_fallback_language_code)
         model = findViewById(R.id.field_model)
         language = findViewById(R.id.field_language_code)
         apiKey = findViewById(R.id.field_api_key)
@@ -111,7 +115,7 @@ class MainActivity : AppCompatActivity() {
         saveButton = findViewById(R.id.btn_settings_apply)
         testButton = findViewById(R.id.btn_test_connection)
         testResult = findViewById(R.id.connection_result)
-        listOf(endpoint, fallbackEndpoint, fallbackApiKey, model, language, apiKey).forEach { field ->
+        listOf(endpoint, fallbackEndpoint, fallbackApiKey, fallbackModel, fallbackLanguage, model, language, apiKey).forEach { field ->
             field.doAfterTextChanged { invalidateDiagnostics(); refreshButtons() }
         }
         listOf(autoRecord, autoSwitch, trailingSpace, allowInsecure).forEach { toggle ->
@@ -140,6 +144,8 @@ class MainActivity : AppCompatActivity() {
         endpoint = endpoint.text.toString().trim(),
         fallbackEndpoint = fallbackEndpoint.text.toString().trim(),
         fallbackApiKey = fallbackApiKey.text.toString().trim(),
+        fallbackModel = fallbackModel.text.toString().trim(),
+        fallbackLanguage = fallbackLanguage.text.toString().trim(),
         model = model.text.toString().trim(),
         language = language.text.toString().trim(),
         apiKey = apiKey.text.toString().trim(),
@@ -158,6 +164,8 @@ class MainActivity : AppCompatActivity() {
                 endpoint.setText(settings.endpoint)
                 fallbackEndpoint.setText(settings.fallbackEndpoint)
                 fallbackApiKey.setText(settings.fallbackApiKey)
+                fallbackModel.setText(settings.fallbackModel)
+                fallbackLanguage.setText(settings.fallbackLanguage)
                 model.setText(settings.model)
                 language.setText(settings.language)
                 apiKey.setText(settings.apiKey)
@@ -179,6 +187,8 @@ class MainActivity : AppCompatActivity() {
                         endpoint.setText(defaults.endpoint)
                         fallbackEndpoint.setText("")
                         fallbackApiKey.setText("")
+                        fallbackModel.setText(defaults.fallbackModel)
+                        fallbackLanguage.setText(defaults.fallbackLanguage)
                         model.setText(defaults.model)
                         language.setText(defaults.language)
                         apiKey.setText("")
@@ -198,7 +208,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun validatedForm(): AppSettings? {
         val settings = readForm()
-        listOf(R.id.input_endpoint, R.id.input_fallback_endpoint, R.id.input_fallback_api_key, R.id.input_model, R.id.input_language, R.id.input_api_key).forEach {
+        listOf(R.id.input_endpoint, R.id.input_fallback_endpoint, R.id.input_fallback_api_key, R.id.input_fallback_model, R.id.input_fallback_language, R.id.input_model, R.id.input_language, R.id.input_api_key).forEach {
             findViewById<TextInputLayout>(it).error = null
         }
         if (settings.fallbackEndpoint.isNotEmpty() || settings.fallbackApiKey.isNotEmpty()) {
@@ -213,6 +223,22 @@ class MainActivity : AppCompatActivity() {
                 fallbackEndpoint.requestFocus()
                 return null
             }
+            val fallbackFieldError = when {
+                settings.fallbackModel.isBlank() || settings.fallbackModel.length > 4096 ||
+                    settings.fallbackModel.any { it.isISOControl() } ->
+                    R.id.input_fallback_model to R.string.invalid_model
+                !settings.fallbackLanguage.matches(Regex("[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?")) ->
+                    R.id.input_fallback_language to R.string.invalid_language
+                settings.fallbackModel == SettingsRepository.DEFAULT_MODEL && settings.fallbackLanguage != "en" ->
+                    R.id.input_fallback_language to R.string.english_model_only
+                else -> null
+            }
+            if (fallbackFieldError != null) {
+                val input = findViewById<TextInputLayout>(fallbackFieldError.first)
+                input.error = getString(fallbackFieldError.second)
+                input.editText?.requestFocus()
+                return null
+            }
         }
         val url = settings.endpoint.toHttpUrlOrNull()
         val error = when {
@@ -221,7 +247,7 @@ class MainActivity : AppCompatActivity() {
                 url.query != null || url.fragment != null ||
                 !url.encodedPath.endsWith("/v1/audio/transcriptions") ->
                 R.id.input_endpoint to R.string.invalid_endpoint
-            url.scheme == "http" && (url.host != "gx10" || !settings.allowInsecure) ->
+            url.scheme == "http" && !settings.allowInsecure ->
                 R.id.input_endpoint to R.string.http_not_allowed
             url.scheme == "http" && settings.apiKey.isNotEmpty() ->
                 R.id.input_api_key to R.string.http_key_not_allowed
@@ -293,7 +319,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setBusy(value: Boolean) {
         busy = value
-        listOf(endpoint, fallbackEndpoint, fallbackApiKey, model, language, apiKey, autoRecord, autoSwitch, trailingSpace, allowInsecure)
+        listOf(endpoint, fallbackEndpoint, fallbackApiKey, fallbackModel, fallbackLanguage, model, language, apiKey, autoRecord, autoSwitch, trailingSpace, allowInsecure)
             .forEach { it.isEnabled = loaded && !busy }
         saveButton.setText(if (value) R.string.settings_working else R.string.settings_btn_apply)
         refreshButtons()

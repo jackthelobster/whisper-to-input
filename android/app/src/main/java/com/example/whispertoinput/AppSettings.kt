@@ -11,7 +11,9 @@ data class AppSettings(
     val trailingSpace: Boolean = false,
     val allowInsecure: Boolean = true,
     val fallbackEndpoint: String = "",
-    val fallbackApiKey: String = ""
+    val fallbackApiKey: String = "",
+    val fallbackModel: String = model,
+    val fallbackLanguage: String = language
 ) {
     // Never let incidental logging of the settings object disclose a credential or URL query.
     override fun toString(): String = "AppSettings(credentials and endpoint redacted)"

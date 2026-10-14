@@ -10,7 +10,7 @@ This fork targets a Samsung Galaxy S10e running Android 12. It provides a native
 | Model | distil-whisper/distil-large-v3 |
 | Language | en |
 | API key | Leave blank for the current server |
-| Allow local HTTP | Enabled for gx10 only |
+| Allow unsecure HTTP | Enabled; applies to any configured host |
 | Auto-record | Off by default |
 
 Only English is supported by this particular distil-whisper server. Other OpenAI-compatible transcription servers can be configured using HTTPS. This fork focuses on that multipart API; the upstream ASR-specific route, NIM OGG mode and Chinese conversion settings are not retained.
@@ -25,13 +25,13 @@ Only English is supported by this particular distil-whisper server. Other OpenAI
 
 The app checks the configured server on launch and whenever voice input opens, then every 10 seconds while the voice keyboard is visible, including during recording and transcription. It shows “Ready.” only after `/v1/models` responds successfully and lists the selected model. Failed connections, authentication, redirects, errors and missing models show an unavailable status. These checks send no audio and do not prove that transcription will succeed.
 
-You can save an optional fallback transcription URL and its own API key. Both servers use the selected model and language. Each check tries main first; only if main is unavailable does it immediately check fallback. When fallback passes, the keyboard shows “Ready. Using the fallback endpoint.” and sends subsequent dictation to fallback. The next check always retries main and switches back when it is available. Checks stop when the keyboard hides or the input session ends. An upload already in progress finishes on its original endpoint.
+Settings group the main and fallback transcription servers separately, each with its own URL, model, language and optional API key. Leave the fallback URL empty to disable it. Existing fallback configurations initially inherit the previously shared model and language. Each check tries main first; only if main is unavailable does it immediately check fallback. When fallback passes, the keyboard shows “Ready. Using the fallback endpoint.” and sends subsequent dictation to fallback. The next check always retries main and switches back when it is available. Checks stop when the keyboard hides or the input session ends. An upload already in progress finishes on its original endpoint.
 
 The top-left back arrow returns to the previous typing keyboard. It is available while listening, transcribing, idle or in a protected field; leaving cancels unfinished dictation. If Android has no previous keyboard, the arrow opens the keyboard picker. Enable “Return to previous keyboard” in settings to return automatically after successful transcription.
 
 Whisper Input registers as an auxiliary voice input rather than a typing keyboard. Android makes auxiliary inputs available in the keyboard picker while a keyboard is open; they are not intended as the default typing keyboard. This follows [Android’s voice-input subtype behavior](https://developer.android.com/reference/android/view/inputmethod/InputMethodSubtype#isAuxiliary()). Samsung’s microphone button uses its own provider selection: [Samsung documents Samsung voice input and Google Voice Typing](https://www.samsung.com/us/support/answer/ANS10001592/). Registering a voice subtype does not guarantee that Samsung will offer Whisper there. Use the navigation-bar keyboard picker to enter Whisper on Samsung devices.
 
-HTTP itself is unencrypted. The exception is restricted to exact gx10, requires the local-HTTP switch, and never accepts an API key. Use only over a trusted private network or encrypted VPN; use HTTPS for other servers. Password/private fields disable dictation. A recording is limited to two minutes.
+HTTP itself is unencrypted. “Allow unsecure HTTP” enables HTTP for any configured main or fallback host and displays a warning. API keys still require HTTPS. Use HTTP only over a trusted private network or encrypted VPN; prefer HTTPS. Password/private fields disable dictation. A recording is limited to two minutes.
 
 ## Verification and source
 

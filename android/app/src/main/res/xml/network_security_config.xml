@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
+    <!-- EndpointPolicy enforces the user HTTP switch before every probe and upload.
+         Android must permit cleartext for user-configured hosts; TLS uses system CAs. -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <!-- User-approved private server. No subdomains, public HTTP, or insecure TLS. -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">gx10</domain>
-    </domain-config>
 </network-security-config>

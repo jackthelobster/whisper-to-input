@@ -4,20 +4,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EndpointPolicyTest {
-    @Test fun acceptsCustomHttpsAndOnlyApprovedHttpHost() {
+    @Test fun acceptsCustomHttpsAndDefaultHttpHost() {
         assertTrue(EndpointPolicy.validate("https://example.test:8443/custom/transcribe", false).isHttps)
         assertEquals("gx10", EndpointPolicy.validate(AppSettings()).host)
         assertEquals("gx10", EndpointPolicy.validate("http://gx10:8020/custom", true).host)
     }
 
-    @Test fun refusesHttpOutsideExactGx10AndWhenToggleIsOff() {
-        listOf("gx10.example.test", "gx10.", "localhost", "127.0.0.1", "192.168.1.10", "[::1]").forEach { host ->
-            assertThrows(TranscriptionException::class.java) {
-                EndpointPolicy.validate("http://$host:8020/v1/audio/transcriptions", true)
-            }
-        }
-        assertThrows(TranscriptionException::class.java) {
-            EndpointPolicy.validate(AppSettings(allowInsecure = false))
+    @Test fun httpOnAnyHostRequiresToggleAndRejectsKeys() {
+        listOf("gx10", "gx10.example.test", "localhost", "127.0.0.1", "192.168.1.10", "[::1]", "example.test").forEach { host ->
+            val endpoint = "http://$host:8020/v1/audio/transcriptions"
+            assertFalse(EndpointPolicy.validate(endpoint, true).isHttps)
+            assertThrows(TranscriptionException::class.java) { EndpointPolicy.validate(endpoint, false) }
+            assertThrows(TranscriptionException::class.java) { EndpointPolicy.validate(endpoint, true, "secret") }
         }
     }
 

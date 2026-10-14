@@ -81,6 +81,18 @@ class TranscriptionProtocolTest {
         }
     }
 
+    @Test fun invalidFallbackModelAndLanguageAreRejected() {
+        val settings = AppSettings(fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions")
+        assertThrows(TranscriptionException::class.java) {
+            TranscriptionProtocol.validateSettings(settings.copy(fallbackModel = ""))
+        }
+        assertThrows(TranscriptionException::class.java) {
+            TranscriptionProtocol.validateSettings(settings.copy(fallbackLanguage = "fr\n"))
+        }
+        // Unused fallback fields do not prevent saving main-server settings.
+        TranscriptionProtocol.validateSettings(settings.copy(fallbackEndpoint = "", fallbackModel = ""))
+    }
+
     @Test fun settingsToStringRedactsBothKeyAndEndpoint() {
         val settings = AppSettings(endpoint = "https://example.test/?secret=query", apiKey = "unit-test-token")
         assertFalse(settings.toString().contains("unit-test-token"))

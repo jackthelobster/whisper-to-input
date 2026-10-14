@@ -18,6 +18,8 @@ import kotlinx.coroutines.withContext
 // The sole DataStore delegate: services and UI must not create another settings store.
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 val SPEECH_TO_TEXT_BACKEND = stringPreferencesKey("speech-to-text-backend")
+val FALLBACK_MODEL = stringPreferencesKey("fallback-model")
+val FALLBACK_LANGUAGE_CODE = stringPreferencesKey("fallback-language-code")
 val FALLBACK_ENDPOINT = stringPreferencesKey("fallback-endpoint")
 val ENDPOINT = stringPreferencesKey("endpoint")
 val LANGUAGE_CODE = stringPreferencesKey("language-code")
@@ -64,6 +66,8 @@ class SettingsRepository internal constructor(
                 }
                 AppSettings(
                     fallbackEndpoint = fallbackEndpoint,
+                    fallbackModel = preferences[FALLBACK_MODEL] ?: preferences[MODEL]?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL,
+                    fallbackLanguage = preferences[FALLBACK_LANGUAGE_CODE] ?: preferences[LANGUAGE_CODE] ?: "en",
                     fallbackApiKey = fallbackCredentials?.read().orEmpty(),
                     endpoint = endpoint,
                     model = preferences[MODEL]?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL,
@@ -101,6 +105,8 @@ class SettingsRepository internal constructor(
                     store.edit {
                         it[ENDPOINT] = settings.endpoint
                         it[FALLBACK_ENDPOINT] = settings.fallbackEndpoint
+                        it[FALLBACK_MODEL] = settings.fallbackModel
+                        it[FALLBACK_LANGUAGE_CODE] = settings.fallbackLanguage
                         it[MODEL] = settings.model
                         it[LANGUAGE_CODE] = settings.language
                         it[AUTO_RECORDING_START] = settings.autoRecord

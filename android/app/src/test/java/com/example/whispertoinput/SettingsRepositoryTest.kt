@@ -252,6 +252,14 @@ class SettingsRepositoryTest {
         } catch (_: TranscriptionException) { }
         assertEquals(0, credentials.writes)
     }
+    @Test fun legacyFallbackInheritsMainModelAndLanguage() = runBlocking {
+        val store = MemoryStore(preferencesOf(MODEL to "custom-model", LANGUAGE_CODE to "fr",
+            FALLBACK_ENDPOINT to "https://fallback.example/v1/audio/transcriptions"))
+        val settings = SettingsRepository(store, MemoryCredentials()).load()
+        assertEquals("custom-model", settings.fallbackModel)
+        assertEquals("fr", settings.fallbackLanguage)
+    }
+
     @Test fun fallbackRoundTripsWithSeparateEncryptedCredential() = runBlocking {
         val store = MemoryStore()
         val main = MemoryCredentials()
@@ -259,7 +267,7 @@ class SettingsRepositoryTest {
         val repository = SettingsRepository(store, main, fallback)
         val settings = AppSettings(endpoint = "https://main.example/v1/audio/transcriptions",
             apiKey = "main-token", fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions",
-            fallbackApiKey = "fallback-token")
+            fallbackApiKey = "fallback-token", fallbackModel = "whisper-1", fallbackLanguage = "fr")
         repository.save(settings)
         assertEquals(settings, repository.load())
         assertEquals(settings.endpoint, main.endpoint)

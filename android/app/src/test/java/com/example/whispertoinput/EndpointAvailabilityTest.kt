@@ -23,7 +23,8 @@ import java.util.concurrent.atomic.AtomicReference
 class EndpointAvailabilityTest {
     private val settings = AppSettings(
         endpoint = "https://main.example/v1/audio/transcriptions", apiKey = "main-secret",
-        fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions", fallbackApiKey = "fallback-secret"
+        fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions", fallbackApiKey = "fallback-secret",
+        fallbackModel = "whisper-1", fallbackLanguage = "fr"
     )
     private val servers = mutableListOf<MockWebServer>()
     private val clients = mutableListOf<OkHttpClient>()
@@ -50,7 +51,8 @@ class EndpointAvailabilityTest {
         val selected = selector.select(settings)!!
         assertEquals(listOf(settings.endpoint, settings.fallbackEndpoint), checked.map { it.endpoint })
         assertEquals("fallback-secret", selected.apiKey)
-        assertEquals(settings.model, selected.model)
+        assertEquals(settings.fallbackModel, selected.model)
+        assertEquals(settings.fallbackLanguage, selected.language)
         assertEquals("", selected.fallbackEndpoint)
     }
 

@@ -45,14 +45,14 @@
         <item>@string/settings_option_whisper_asr_webservice</item>
         <item>@string/settings_option_nvidia_nim</item>
     </string-array>
-    <string name="settings_endpoint">Transcription URL</string>
+    <string name="settings_endpoint">URL</string>
     <string name="settings_endpoint_desc">Full URL, including /v1/audio/transcriptions.</string>
     <string name="settings_endpoint_hint"><![CDATA[e.g., http://<host>:<port>/asr]]></string>
     <string name="settings_language_code">Language</string>
-    <string name="settings_language_code_desc">Use en. The default Distil-Whisper model supports English only.</string>
+    <string name="settings_language_code_desc">Language code, such as en or fr. The default Distil-Whisper model supports English only.</string>
     <string name="settings_language_code_hint">Enter Language Code (e.g., en, zh)</string>
     <string name="settings_api_key">API key (optional)</string>
-    <string name="settings_api_key_desc">Leave empty for gx10. HTTPS is required when using a key.</string>
+    <string name="settings_api_key_desc">Leave empty if authentication is not required. HTTPS is required when using a key.</string>
     <string name="settings_api_key_hint">Enter OpenAI API Key…</string>
     <string name="settings_model">Model</string>
     <string name="settings_model_desc">The model to use for transcription (e.g., whisper-1).</string>
@@ -100,11 +100,12 @@
     <string name="keyboard_enabled">Keyboard · enabled</string>
     <string name="enable_keyboard">Enable keyboard</string>
     <string name="choose_keyboard">Choose keyboard</string>
-    <string name="server_title">Transcription server</string>
+    <string name="fallback_server_title">Fallback transcription server</string>
+    <string name="server_title">Main transcription server</string>
     <string name="server_description">OpenAI-compatible audio endpoint. Defaults are configured for gx10 and English dictation.</string>
     <string name="behavior_title">Dictation preferences</string>
-    <string name="allow_insecure">Allow HTTP for gx10</string>
-    <string name="http_warning">HTTP has no transport encryption. Use gx10 only on a trusted local network or through Tailscale. API keys require HTTPS and are never sent over HTTP.</string>
+    <string name="allow_insecure">Allow unsecure HTTP</string>
+    <string name="http_warning">Warning: HTTP sends audio and transcriptions without encryption. This setting applies to any host for both servers. Use only on a trusted network or encrypted VPN. API keys require HTTPS and are never sent over HTTP.</string>
     <string name="test_connection">Test connection</string>
     <string name="test_connection_description">Checks main /v1/models, then fallback if needed, using these fields without saving, recording or uploading audio. This does not verify transcription.</string>
     <string name="testing_connection">Checking server and model…</string>
@@ -114,7 +115,7 @@
     <string name="settings_save_failed">Could not save settings. Your changes have not been saved.</string>
     <string name="settings_invalid">These settings are not allowed. Check the endpoint, language and API key.</string>
     <string name="invalid_endpoint">Enter a full URL ending in /v1/audio/transcriptions, without credentials, query or fragment.</string>
-    <string name="http_not_allowed">Use HTTPS, or allow HTTP specifically for gx10.</string>
+    <string name="http_not_allowed">Use HTTPS, or enable Allow unsecure HTTP.</string>
     <string name="http_key_not_allowed">Remove the API key or switch to HTTPS. Keys cannot be sent over HTTP.</string>
     <string name="invalid_model">Enter a model ID without control characters.</string>
     <string name="invalid_language">Enter a language code such as en.</string>
@@ -134,9 +135,9 @@
     <string name="keyboard_ready_fallback">Ready. Using the fallback endpoint.</string>
     <string name="endpoint_unavailable">Transcription endpoint unavailable.</string>
     <string name="endpoint_unavailable_hint">Check your server or settings. Retrying every 10 seconds.</string>
-    <string name="settings_fallback_endpoint">Fallback transcription URL (optional)</string>
-    <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Main is checked first every 10 seconds. Both servers must support the selected model.</string>
-    <string name="settings_fallback_api_key">Fallback API key (optional)</string>
+    <string name="settings_fallback_endpoint">Fallback URL</string>
+    <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Main is checked first every 10 seconds. Leave the URL empty to disable fallback.</string>
+    <string name="settings_fallback_api_key">API key (optional)</string>
     <string name="keyboard_ready_hint">Tap the microphone to dictate</string>
     <string name="keyboard_recording_hint">Tap stop to transcribe</string>
     <string name="keyboard_transcribing_hint">Waiting for your server · cancel anytime</string>

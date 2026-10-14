@@ -21,6 +21,7 @@ class EndpointAvailability(
         if (settings.fallbackEndpoint.isBlank()) return null
         val fallback = settings.copy(
             endpoint = settings.fallbackEndpoint, apiKey = settings.fallbackApiKey,
+            model = settings.fallbackModel, language = settings.fallbackLanguage,
             fallbackEndpoint = "", fallbackApiKey = ""
         )
         return fallback.takeIf { probe(it) }
