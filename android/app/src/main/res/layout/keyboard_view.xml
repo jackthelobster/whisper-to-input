@@ -144,7 +144,6 @@
         style="@style/KeyboardKey"
         android:contentDescription="@string/backspace_button_hint"
         app:srcCompat="@drawable/ic_dictation_backspace"
-        app:layout_constraintStart_toEndOf="@id/btn_mic_frame"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@id/btn_mic_frame"
         app:layout_constraintBottom_toBottomOf="@id/btn_mic_frame" />
