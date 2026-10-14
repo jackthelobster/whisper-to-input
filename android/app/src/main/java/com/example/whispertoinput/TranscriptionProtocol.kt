@@ -13,6 +13,11 @@ object TranscriptionProtocol {
 
     fun validateSettings(settings: AppSettings) {
         EndpointPolicy.validate(settings)
+        if (settings.fallbackEndpoint.isNotBlank()) {
+            EndpointPolicy.validate(settings.fallbackEndpoint, settings.allowInsecure, settings.fallbackApiKey)
+        } else if (settings.fallbackApiKey.isNotEmpty()) {
+            throw TranscriptionException("Enter a fallback endpoint or remove its API key.")
+        }
         if (settings.model.isBlank() || settings.model.length > 4096 ||
             settings.model.any { it.isISOControl() }) {
             throw TranscriptionException("Enter a non-empty transcription model.")

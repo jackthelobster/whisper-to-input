@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 // The sole DataStore delegate: services and UI must not create another settings store.
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 val SPEECH_TO_TEXT_BACKEND = stringPreferencesKey("speech-to-text-backend")
+val FALLBACK_ENDPOINT = stringPreferencesKey("fallback-endpoint")
 val ENDPOINT = stringPreferencesKey("endpoint")
 val LANGUAGE_CODE = stringPreferencesKey("language-code")
 val API_KEY = stringPreferencesKey("api-key") // Legacy migration only. Never write plaintext here.
@@ -31,11 +32,13 @@ val ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-gx10")
 
 class SettingsRepository internal constructor(
     private val store: DataStore<Preferences>,
-    private val credentials: CredentialStore
+    private val credentials: CredentialStore,
+    private val fallbackCredentials: CredentialStore? = null
 ) {
     constructor(context: Context) : this(
         context.applicationContext.dataStore,
-        KeystoreCredentialStore(context.applicationContext)
+        KeystoreCredentialStore(context.applicationContext),
+        KeystoreCredentialStore(context.applicationContext, ".fallback")
     )
 
     suspend fun load(): AppSettings = withContext(Dispatchers.IO) {
@@ -54,7 +57,14 @@ class SettingsRepository internal constructor(
                 if (boundEndpoint != null && boundEndpoint != endpoint) {
                     throw TranscriptionException("Saved credentials do not match the endpoint. Re-enter and save your settings.")
                 }
+                val fallbackEndpoint = preferences[FALLBACK_ENDPOINT].orEmpty()
+                val fallbackBinding = fallbackCredentials?.boundEndpoint()
+                if (fallbackBinding != null && fallbackBinding != fallbackEndpoint) {
+                    throw TranscriptionException("Saved fallback credentials do not match the endpoint.")
+                }
                 AppSettings(
+                    fallbackEndpoint = fallbackEndpoint,
+                    fallbackApiKey = fallbackCredentials?.read().orEmpty(),
                     endpoint = endpoint,
                     model = preferences[MODEL]?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL,
                     language = preferences[LANGUAGE_CODE] ?: "en",
@@ -86,8 +96,11 @@ class SettingsRepository internal constructor(
                         it.remove(API_KEY)
                     }
                     credentials.writeBound(settings.apiKey, settings.endpoint)
+                    check(fallbackCredentials != null || settings.fallbackApiKey.isEmpty())
+                    fallbackCredentials?.writeBound(settings.fallbackApiKey, settings.fallbackEndpoint)
                     store.edit {
                         it[ENDPOINT] = settings.endpoint
+                        it[FALLBACK_ENDPOINT] = settings.fallbackEndpoint
                         it[MODEL] = settings.model
                         it[LANGUAGE_CODE] = settings.language
                         it[AUTO_RECORDING_START] = settings.autoRecord

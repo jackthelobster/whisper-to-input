@@ -44,27 +44,16 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import org.json.JSONObject
-import java.io.IOException
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 private const val MICROPHONE_PERMISSION_REQUEST_CODE = 200
 
 class MainActivity : AppCompatActivity() {
     private lateinit var repository: SettingsRepository
     private lateinit var endpoint: TextInputEditText
+    private lateinit var fallbackEndpoint: TextInputEditText
+    private lateinit var fallbackApiKey: TextInputEditText
     private lateinit var model: TextInputEditText
     private lateinit var language: TextInputEditText
     private lateinit var apiKey: TextInputEditText
@@ -78,15 +67,7 @@ class MainActivity : AppCompatActivity() {
     private var loaded = false
     private var busy = false
     private var savedSettings: AppSettings? = null
-    private val client by lazy {
-        OkHttpClient.Builder()
-            .followRedirects(false)
-            .followSslRedirects(false)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .callTimeout(20, TimeUnit.SECONDS)
-            .build()
-    }
+    private val availability = EndpointAvailability()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,13 +92,17 @@ class MainActivity : AppCompatActivity() {
         }
         repository = SettingsRepository(applicationContext)
         endpoint = findViewById(R.id.field_endpoint)
+        fallbackEndpoint = findViewById(R.id.field_fallback_endpoint)
+        fallbackApiKey = findViewById(R.id.field_fallback_api_key)
         model = findViewById(R.id.field_model)
         language = findViewById(R.id.field_language_code)
         apiKey = findViewById(R.id.field_api_key)
-        apiKey.isSaveEnabled = false
-        apiKey.isSaveFromParentEnabled = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            apiKey.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+        listOf(apiKey, fallbackApiKey).forEach { field ->
+            field.isSaveEnabled = false
+            field.isSaveFromParentEnabled = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                field.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            }
         }
         autoRecord = findViewById(R.id.switch_auto_record)
         autoSwitch = findViewById(R.id.switch_auto_switch)
@@ -126,7 +111,7 @@ class MainActivity : AppCompatActivity() {
         saveButton = findViewById(R.id.btn_settings_apply)
         testButton = findViewById(R.id.btn_test_connection)
         testResult = findViewById(R.id.connection_result)
-        listOf(endpoint, model, language, apiKey).forEach { field ->
+        listOf(endpoint, fallbackEndpoint, fallbackApiKey, model, language, apiKey).forEach { field ->
             field.doAfterTextChanged { invalidateDiagnostics(); refreshButtons() }
         }
         listOf(autoRecord, autoSwitch, trailingSpace, allowInsecure).forEach { toggle ->
@@ -153,6 +138,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun readForm() = AppSettings(
         endpoint = endpoint.text.toString().trim(),
+        fallbackEndpoint = fallbackEndpoint.text.toString().trim(),
+        fallbackApiKey = fallbackApiKey.text.toString().trim(),
         model = model.text.toString().trim(),
         language = language.text.toString().trim(),
         apiKey = apiKey.text.toString().trim(),
@@ -169,6 +156,8 @@ class MainActivity : AppCompatActivity() {
             try {
                 val settings = repository.load()
                 endpoint.setText(settings.endpoint)
+                fallbackEndpoint.setText(settings.fallbackEndpoint)
+                fallbackApiKey.setText(settings.fallbackApiKey)
                 model.setText(settings.model)
                 language.setText(settings.language)
                 apiKey.setText(settings.apiKey)
@@ -178,6 +167,7 @@ class MainActivity : AppCompatActivity() {
                 allowInsecure.isChecked = settings.allowInsecure
                 savedSettings = settings
                 loaded = true
+                checkConnection(settings)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -187,6 +177,8 @@ class MainActivity : AppCompatActivity() {
                         // the form; the service still refuses unreadable settings until Save succeeds.
                         val defaults = AppSettings()
                         endpoint.setText(defaults.endpoint)
+                        fallbackEndpoint.setText("")
+                        fallbackApiKey.setText("")
                         model.setText(defaults.model)
                         language.setText(defaults.language)
                         apiKey.setText("")
@@ -206,8 +198,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun validatedForm(): AppSettings? {
         val settings = readForm()
-        listOf(R.id.input_endpoint, R.id.input_model, R.id.input_language, R.id.input_api_key).forEach {
+        listOf(R.id.input_endpoint, R.id.input_fallback_endpoint, R.id.input_fallback_api_key, R.id.input_model, R.id.input_language, R.id.input_api_key).forEach {
             findViewById<TextInputLayout>(it).error = null
+        }
+        if (settings.fallbackEndpoint.isNotEmpty() || settings.fallbackApiKey.isNotEmpty()) {
+            val fallback = settings.fallbackEndpoint.toHttpUrlOrNull()
+            val fallbackError = try {
+                EndpointPolicy.validate(settings.fallbackEndpoint, settings.allowInsecure, settings.fallbackApiKey)
+                if (fallback == null || fallback.query != null ||
+                    !fallback.encodedPath.endsWith("/v1/audio/transcriptions")) getString(R.string.invalid_endpoint) else null
+            } catch (e: TranscriptionException) { e.message }
+            if (fallbackError != null) {
+                findViewById<TextInputLayout>(R.id.input_fallback_endpoint).error = fallbackError
+                fallbackEndpoint.requestFocus()
+                return null
+            }
         }
         val url = settings.endpoint.toHttpUrlOrNull()
         val error = when {
@@ -248,6 +253,7 @@ class MainActivity : AppCompatActivity() {
                 // Repository persistence finishes before announcing success; keys are destination-bound.
                 repository.save(settings)
                 savedSettings = settings
+                checkConnection(settings)
                 Snackbar.make(findViewById(R.id.settings_root), R.string.successfully_set, Snackbar.LENGTH_SHORT).show()
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -265,68 +271,20 @@ class MainActivity : AppCompatActivity() {
         if (!loaded || busy) return
         val settings = validatedForm() ?: return
         setBusy(true)
-        testResult.visibility = View.VISIBLE
-        testResult.setText(R.string.testing_connection)
         lifecycleScope.launch {
-            try {
-                val message = withContext(Dispatchers.IO) { fetchModels(settings) }
-                testResult.text = message
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                testResult.setText(R.string.connection_failed)
-            } finally {
-                setBusy(false)
-            }
+            try { checkConnection(settings) } finally { setBusy(false) }
         }
     }
 
-    private suspend fun fetchModels(settings: AppSettings): String {
-        val url = requireNotNull(settings.endpoint.toHttpUrlOrNull())
-        val modelsUrl = url.newBuilder()
-            .encodedPath(url.encodedPath.removeSuffix("audio/transcriptions") + "models")
-            .build()
-        val request = Request.Builder().url(modelsUrl).get().apply {
-            if (settings.apiKey.isNotEmpty()) {
-                require(url.isHttps) // Never send a credential over cleartext, including during a test.
-                header("Authorization", "Bearer ${settings.apiKey}")
-            }
-        }.build()
-        val call = client.newCall(request)
-        // Parse a bounded body on OkHttp's worker, not the main thread. Cancellation closes the call.
-        val diagnostics = suspendCancellableCoroutine<Pair<Int, Boolean?>> { continuation ->
-            continuation.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    if (continuation.isActive) continuation.resumeWithException(e)
-                }
-                override fun onResponse(call: Call, response: Response) {
-                    response.use {
-                        val found = if (it.isSuccessful) {
-                            try {
-                                val data = JSONObject(it.peekBody(64 * 1024).string()).optJSONArray("data")
-                                data?.let { models ->
-                                    (0 until models.length()).any { index ->
-                                        models.optJSONObject(index)?.optString("id") == settings.model
-                                    }
-                                }
-                            } catch (_: Exception) { null }
-                        } else null
-                        if (continuation.isActive) continuation.resume(it.code to found)
-                    }
-                }
-            })
-        }
-        val (code, found) = diagnostics
-        return when {
-            code in 200..299 && found == true -> getString(R.string.connection_model_found, code)
-            code in 200..299 && found == false -> getString(R.string.connection_model_missing, code)
-            code in 200..299 -> getString(R.string.connection_no_models, code)
-            code == 401 || code == 403 -> getString(R.string.connection_auth_failed, code)
-            code == 404 || code == 405 -> getString(R.string.connection_models_unsupported, code)
-            code in 300..399 -> getString(R.string.connection_redirect_refused, code)
-            else -> getString(R.string.connection_http_error, code)
-        }
+    private suspend fun checkConnection(settings: AppSettings) {
+        testResult.visibility = View.VISIBLE
+        testResult.setText(R.string.testing_connection)
+        val selected = availability.select(settings)
+        testResult.setText(when {
+            selected == null -> R.string.endpoint_unavailable
+            selected.endpoint != settings.endpoint -> R.string.keyboard_ready_fallback
+            else -> R.string.keyboard_ready
+        })
     }
 
     private fun invalidateDiagnostics() {
@@ -335,7 +293,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setBusy(value: Boolean) {
         busy = value
-        listOf(endpoint, model, language, apiKey, autoRecord, autoSwitch, trailingSpace, allowInsecure)
+        listOf(endpoint, fallbackEndpoint, fallbackApiKey, model, language, apiKey, autoRecord, autoSwitch, trailingSpace, allowInsecure)
             .forEach { it.isEnabled = loaded && !busy }
         saveButton.setText(if (value) R.string.settings_working else R.string.settings_btn_apply)
         refreshButtons()

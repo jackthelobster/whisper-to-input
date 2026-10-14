@@ -32,6 +32,7 @@ class WhisperKeyboard {
     private enum class KeyboardStatus { Idle, Recording, Transcribing }
     private var keyboardStatus = KeyboardStatus.Idle
     private var sensitiveInput = false
+    private var endpointStatus = R.string.testing_connection
     private var errorMessage: String? = null
     private var onStartRecording: () -> Unit = {}
     private var onCancelRecording: () -> Unit = {}
@@ -148,6 +149,11 @@ class WhisperKeyboard {
         setKeyboardStatus(KeyboardStatus.Idle)
     }
 
+    fun setEndpointStatus(status: Int) {
+        endpointStatus = status
+        render()
+    }
+
     fun updateMicrophoneAmplitude(amplitude: Int) {
         if (keyboardStatus != KeyboardStatus.Recording || sensitiveInput) return
         val level = ((log10(amplitude.coerceIn(10, 25000).toFloat()) - 1f) / 3.398f).coerceIn(0f, 1f)
@@ -206,13 +212,15 @@ class WhisperKeyboard {
             recording -> R.string.recording
             transcribing -> R.string.transcribing
             errorMessage != null -> R.string.keyboard_error
-            else -> R.string.keyboard_ready
+            else -> endpointStatus
         }
         val hint = when {
             sensitiveInput -> context.getString(R.string.keyboard_sensitive_hint)
             recording -> context.getString(R.string.keyboard_recording_hint)
             transcribing -> context.getString(R.string.keyboard_transcribing_hint)
             errorMessage != null -> errorMessage
+            endpointStatus == R.string.endpoint_unavailable -> context.getString(R.string.endpoint_unavailable_hint)
+            endpointStatus == R.string.testing_connection -> context.getString(R.string.testing_connection)
             else -> context.getString(R.string.keyboard_ready_hint)
         }
         labelStatus?.setText(status)

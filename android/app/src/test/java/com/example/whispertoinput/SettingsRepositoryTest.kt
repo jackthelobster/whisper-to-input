@@ -252,4 +252,40 @@ class SettingsRepositoryTest {
         } catch (_: TranscriptionException) { }
         assertEquals(0, credentials.writes)
     }
+    @Test fun fallbackRoundTripsWithSeparateEncryptedCredential() = runBlocking {
+        val store = MemoryStore()
+        val main = MemoryCredentials()
+        val fallback = MemoryCredentials()
+        val repository = SettingsRepository(store, main, fallback)
+        val settings = AppSettings(endpoint = "https://main.example/v1/audio/transcriptions",
+            apiKey = "main-token", fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions",
+            fallbackApiKey = "fallback-token")
+        repository.save(settings)
+        assertEquals(settings, repository.load())
+        assertEquals(settings.endpoint, main.endpoint)
+        assertEquals(settings.fallbackEndpoint, fallback.endpoint)
+        assertFalse(store.state.value.asMap().values.contains("fallback-token"))
+        repository.save(settings.copy(fallbackEndpoint = "", fallbackApiKey = ""))
+        assertNull(fallback.value)
+        assertEquals("", repository.load().fallbackEndpoint)
+    }
+
+    @Test fun tornFallbackSaveAndCredentialFailureRequireRecovery() = runBlocking {
+        val store = MemoryStore(preferencesOf(FALLBACK_ENDPOINT to "https://old.example/v1/audio/transcriptions"))
+        val main = MemoryCredentials()
+        val fallback = MemoryCredentials("fallback-token").apply {
+            endpoint = "https://new.example/v1/audio/transcriptions"
+        }
+        try {
+            SettingsRepository(store, main, fallback).load()
+            fail("Mismatched fallback credentials must fail closed")
+        } catch (_: TranscriptionException) { }
+        fallback.failWrite = true
+        try {
+            SettingsRepository(store, main, fallback).save(AppSettings())
+            fail("Failed credential persistence must require recovery")
+        } catch (_: TranscriptionException) { }
+        assertRecoveryRequired(store, main)
+    }
+
 }

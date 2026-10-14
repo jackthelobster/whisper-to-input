@@ -106,7 +106,7 @@
     <string name="allow_insecure">Allow HTTP for gx10</string>
     <string name="http_warning">HTTP has no transport encryption. Use gx10 only on a trusted local network or through Tailscale. API keys require HTTPS and are never sent over HTTP.</string>
     <string name="test_connection">Test connection</string>
-    <string name="test_connection_description">Checks /v1/models using these fields without saving, recording or uploading audio. This does not verify transcription.</string>
+    <string name="test_connection_description">Checks main /v1/models, then fallback if needed, using these fields without saving, recording or uploading audio. This does not verify transcription.</string>
     <string name="testing_connection">Checking server and model…</string>
     <string name="settings_working">Working…</string>
     <string name="settings_load_failed">Saved settings or API key could not be read. Re-enter settings to recover.</string>
@@ -130,7 +130,13 @@
     <string name="connection_http_error">HTTP %1$d · server returned an error. No audio was sent.</string>
     <string name="system_screen_unavailable">This system screen could not be opened.</string>
     <string name="retry">Retry</string>
-    <string name="keyboard_ready">Ready</string>
+    <string name="keyboard_ready">Ready.</string>
+    <string name="keyboard_ready_fallback">Ready. Using the fallback endpoint.</string>
+    <string name="endpoint_unavailable">Transcription endpoint unavailable.</string>
+    <string name="endpoint_unavailable_hint">Check your server or settings. Retrying every 10 seconds.</string>
+    <string name="settings_fallback_endpoint">Fallback transcription URL (optional)</string>
+    <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Main is checked first every 10 seconds. Both servers must support the selected model.</string>
+    <string name="settings_fallback_api_key">Fallback API key (optional)</string>
     <string name="keyboard_ready_hint">Tap the microphone to dictate</string>
     <string name="keyboard_recording_hint">Tap stop to transcribe</string>
     <string name="keyboard_transcribing_hint">Waiting for your server · cancel anytime</string>

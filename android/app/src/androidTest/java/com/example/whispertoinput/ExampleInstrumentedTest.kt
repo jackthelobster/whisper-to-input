@@ -74,15 +74,48 @@ class ExampleInstrumentedTest {
         }
     }
 
+    @Test fun endpointChecksUpdateIdleStatusWithoutInterruptingRecordingOrErrors() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val keyboard = WhisperKeyboard()
+                val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {}, {}, {}, { false })
+                val status = view.findViewById<android.widget.TextView>(R.id.label_status)
+                assertEquals(activity.getString(R.string.testing_connection), status.text.toString())
+                keyboard.setEndpointStatus(R.string.endpoint_unavailable)
+                assertEquals(activity.getString(R.string.endpoint_unavailable), status.text.toString())
+                keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
+                assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
+                keyboard.tryStartRecording()
+                keyboard.setEndpointStatus(R.string.keyboard_ready)
+                assertEquals(activity.getString(R.string.recording), status.text.toString())
+                keyboard.reset()
+                assertEquals(activity.getString(R.string.keyboard_ready), status.text.toString())
+                keyboard.showError("Retry your recording")
+                keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
+                assertEquals(activity.getString(R.string.keyboard_error), status.text.toString())
+                keyboard.reset()
+                assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
+            }
+        }
+    }
+
     @Test fun credentialsAreEncryptedAndRoundTrip() = runBlocking {
         val repository = SettingsRepository(context)
         val secret = "instrumentation-only-placeholder-secret-7341"
         try {
-            repository.save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions", apiKey = secret, allowInsecure = false))
+            val fallbackSecret = "instrumentation-only-fallback-secret-9274"
+            repository.save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions", apiKey = secret,
+                fallbackEndpoint = "https://fallback.example.com/v1/audio/transcriptions",
+                fallbackApiKey = fallbackSecret, allowInsecure = false))
+            assertEquals(fallbackSecret, repository.load().fallbackApiKey)
             assertEquals(secret, repository.load().apiKey)
             val privateFiles = File(context.applicationInfo.dataDir).walkTopDown().filter { it.isFile && (it.path.contains("shared_prefs") || it.path.contains("datastore")) }.toList()
             assertTrue(privateFiles.isNotEmpty())
-            privateFiles.forEach { assertFalse("Plaintext API key found in ${it.name}", it.readBytes().toString(Charsets.ISO_8859_1).contains(secret)) }
+            privateFiles.forEach {
+                val contents = it.readBytes().toString(Charsets.ISO_8859_1)
+                assertFalse("Plaintext API key found in ${it.name}", contents.contains(secret))
+                assertFalse("Plaintext fallback key found in ${it.name}", contents.contains(fallbackSecret))
+            }
         } finally {
             repository.save(AppSettings())
         }

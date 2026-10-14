@@ -97,6 +97,33 @@
                             android:maxLines="3" />
                     </com.google.android.material.textfield.TextInputLayout>
                     <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_fallback_endpoint"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_fallback_endpoint"
+                        app:helperText="@string/settings_fallback_endpoint_desc">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_fallback_endpoint"
+                            style="@style/SettingsField"
+                            android:inputType="textUri"
+                            android:imeOptions="actionNext"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_fallback_api_key"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_fallback_api_key"
+                        android:importantForAutofill="noExcludeDescendants"
+                        android:saveEnabled="false">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_fallback_api_key"
+                            style="@style/SettingsField"
+                            android:inputType="textPassword"
+                            android:imeOptions="actionNext"
+                            android:importantForAutofill="noExcludeDescendants"
+                            android:saveEnabled="false"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/input_model"
                         style="@style/SettingsInput"
                         android:hint="@string/settings_model">

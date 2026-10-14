@@ -37,6 +37,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import android.os.SystemClock
 import java.io.File
 
 private const val AUDIO_MEDIA_TYPE_M4A = "audio/mp4"
@@ -48,6 +50,7 @@ class WhisperInputService : InputMethodService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var recorderManager: RecorderManager? = null
     private var settingsJob: Job? = null
+    private val availability = EndpointAvailability()
     private var generation = 0L
     private var requestGeneration = 0L
     private var windowShown = false
@@ -67,6 +70,7 @@ class WhisperInputService : InputMethodService() {
         val hasActionLabel: Boolean,
     ) {
         var settings: AppSettings? = null
+        var selectedSettings: AppSettings? = null
         var userInteracted = false
         var audio: File? = null
         var transcribing = false
@@ -176,26 +180,31 @@ class WhisperInputService : InputMethodService() {
         val allowed = EditorPolicy.allowsDictation(session.inputType, session.imeOptions)
         whisperKeyboard.setSensitiveInput(!allowed)
         whisperKeyboard.reset()
+        whisperKeyboard.setEndpointStatus(R.string.testing_connection)
         if (!allowed) return
         settingsJob = serviceScope.launch {
-            try {
-                val settings = SettingsRepository(this@WhisperInputService).load()
+            while (isCurrentDictationTarget(session)) {
+                val started = SystemClock.elapsedRealtime()
+                val settings = try {
+                    SettingsRepository(this@WhisperInputService).load()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                val selected = settings?.let { availability.select(it) }
                 if (!isCurrentDictationTarget(session)) return@launch
                 session.settings = settings
-                // Default false is supplied by the repository. A delayed load cannot override a
-                // manual gesture, resume a hidden editor, or start recording in a replacement field.
-                if (settings.autoRecord && !session.userInteracted && session.audio == null &&
-                    !session.transcribing && recorderManager?.isRecording == false) {
+                session.selectedSettings = selected
+                whisperKeyboard.setEndpointStatus(when {
+                    selected == null -> R.string.endpoint_unavailable
+                    selected.endpoint != settings?.endpoint -> R.string.keyboard_ready_fallback
+                    else -> R.string.keyboard_ready
+                })
+                // A late check must never restart a microphone after a manual gesture.
+                if (selected != null && settings?.autoRecord == true && !session.userInteracted &&
+                    session.audio == null && !session.transcribing && recorderManager?.isRecording == false) {
                     whisperKeyboard.tryStartRecording()
                 }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // A failed delayed settings load must not put a manually started recorder's UI
-                // back into idle while leaving its microphone running.
-                if (isCurrentTarget(session) && !session.userInteracted) {
-                    showError("Unable to load dictation settings.")
-                }
+                delay((10_000L - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(1L))
             }
         }
     }
@@ -277,6 +286,11 @@ class WhisperInputService : InputMethodService() {
             showError("No usable audio was recorded. Please record again.")
             return
         }
+        val selected = session.selectedSettings
+        if (selected == null) {
+            showError("No transcription endpoint is available. Retry after the next connection check.")
+            return
+        }
         val request = ++requestGeneration
         session.transcribing = true
         // Enter while recording means finish dictation, NOT submit a chat/message or insert an
@@ -284,7 +298,7 @@ class WhisperInputService : InputMethodService() {
         val suffix = if (attachToEnd == " ") " " else ""
         try {
             whisperTranscriber.startAsync(
-                this, audio.absolutePath, AUDIO_MEDIA_TYPE_M4A, suffix,
+                selected, audio.absolutePath, AUDIO_MEDIA_TYPE_M4A, suffix,
                 { text ->
                     serviceScope.launch {
                         if (!ownsRequest(session, request, audio)) return@launch
