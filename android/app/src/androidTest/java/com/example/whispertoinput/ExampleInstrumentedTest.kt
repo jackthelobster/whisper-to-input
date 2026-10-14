@@ -150,6 +150,9 @@ class ExampleInstrumentedTest {
                     keyboard.tryStartRecording()
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-listening-$label")
                     keyboard.reset()
+                    keyboard.showError("Transcription failed. Tap retry to try again.")
+                    capture(view, activity.getExternalFilesDir(null)!!, "keyboard-retry-$label")
+                    keyboard.reset()
                 }
             }
         }

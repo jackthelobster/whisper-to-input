@@ -27,6 +27,7 @@
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/btn_previous_ime"
         style="@style/KeyboardKey"
+        android:background="@android:color/transparent"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:padding="12dp"
@@ -37,6 +38,7 @@
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/btn_settings"
         style="@style/KeyboardKey"
+        android:background="@android:color/transparent"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:padding="12dp"
@@ -135,8 +137,7 @@
         android:contentDescription="@string/retry_dictation"
         android:visibility="invisible"
         app:srcCompat="@drawable/ic_dictation_retry"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btn_mic_frame"
+        app:layout_constraintStart_toStartOf="@id/btn_space_bar"
         app:layout_constraintTop_toTopOf="@id/btn_mic_frame"
         app:layout_constraintBottom_toBottomOf="@id/btn_mic_frame" />
     <com.example.whispertoinput.keyboard.BackspaceButton
