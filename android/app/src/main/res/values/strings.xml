@@ -134,7 +134,7 @@
     <string name="keyboard_ready">Ready.</string>
     <string name="keyboard_ready_fallback">Ready. Using the fallback endpoint.</string>
     <string name="endpoint_unavailable">Transcription endpoint unavailable.</string>
-    <string name="endpoint_unavailable_hint">Check your server or settings. Retrying every 10 seconds.</string>
+    <string name="endpoint_unavailable_hint">Tap refresh to check both endpoints. Also retrying every 10 seconds.</string>
     <string name="settings_fallback_endpoint">Fallback URL</string>
     <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Main is checked first every 10 seconds. Leave the URL empty to disable fallback.</string>
     <string name="settings_fallback_api_key">API key (optional)</string>
@@ -151,4 +151,9 @@
     <string name="enter_key">Enter</string>
     <string name="transcribe_enter">Stop recording and transcribe without submitting</string>
     <string name="transcribe_space">Stop recording, transcribe and add a space</string>
+    <string name="settings_show_shift_enter">Show Shift+Enter key</string>
+    <string name="settings_show_shift_enter_desc">Display Shift+Enter to the left of a shorter spacebar.</string>
+    <string name="shift_enter_key">Shift+Enter</string>
+    <string name="shift_key_label">SHIFT</string>
+    <string name="refresh_endpoints">Refresh endpoint connections</string>
 </resources>

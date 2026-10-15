@@ -9,6 +9,7 @@ data class AppSettings(
     val autoRecord: Boolean = false,
     val autoSwitch: Boolean = false,
     val trailingSpace: Boolean = false,
+    val showShiftEnter: Boolean = false,
     val allowInsecure: Boolean = true,
     val fallbackEndpoint: String = "",
     val fallbackApiKey: String = "",

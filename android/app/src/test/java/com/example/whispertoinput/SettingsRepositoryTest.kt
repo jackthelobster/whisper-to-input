@@ -73,6 +73,17 @@ class SettingsRepositoryTest {
         assertFalse(settings.autoRecord)
         assertFalse(settings.autoSwitch)
         assertFalse(settings.trailingSpace)
+        assertFalse(settings.showShiftEnter)
+    }
+
+    @Test fun shiftEnterTogglePersistsAcrossRepositoryInstances() = runBlocking {
+        val store = MemoryStore()
+        val credentials = MemoryCredentials()
+        val repository = SettingsRepository(store, credentials)
+        repository.save(AppSettings(showShiftEnter = true))
+        assertTrue(SettingsRepository(store, credentials).load().showShiftEnter)
+        repository.save(repository.load().copy(showShiftEnter = false))
+        assertFalse(SettingsRepository(store, credentials).load().showShiftEnter)
     }
 
     @Test fun migrationEncryptsLegacyCredentialThenRemovesPlaintext() = runBlocking {

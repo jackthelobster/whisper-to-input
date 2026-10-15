@@ -12,6 +12,14 @@ internal object EditorOperations {
         return committed
     }
 
+    fun shiftEnter(connection: InputConnection) {
+        val time = android.os.SystemClock.uptimeMillis()
+        for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+            connection.sendKeyEvent(KeyEvent(time, time, action, KeyEvent.KEYCODE_ENTER, 0,
+                KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON))
+        }
+    }
+
     fun deleteBackward(connection: InputConnection) {
         // Inspect selection only; never read surrounding potentially sensitive text.
         val selected = connection.getSelectedText(0)

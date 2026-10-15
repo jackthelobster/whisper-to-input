@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var apiKey: TextInputEditText
     private lateinit var autoRecord: MaterialSwitch
     private lateinit var autoSwitch: MaterialSwitch
+    private lateinit var shiftEnter: MaterialSwitch
     private lateinit var trailingSpace: MaterialSwitch
     private lateinit var allowInsecure: MaterialSwitch
     private lateinit var saveButton: MaterialButton
@@ -110,6 +111,7 @@ class MainActivity : AppCompatActivity() {
         }
         autoRecord = findViewById(R.id.switch_auto_record)
         autoSwitch = findViewById(R.id.switch_auto_switch)
+        shiftEnter = findViewById(R.id.switch_shift_enter)
         trailingSpace = findViewById(R.id.switch_trailing_space)
         allowInsecure = findViewById(R.id.switch_allow_insecure)
         saveButton = findViewById(R.id.btn_settings_apply)
@@ -118,7 +120,7 @@ class MainActivity : AppCompatActivity() {
         listOf(endpoint, fallbackEndpoint, fallbackApiKey, fallbackModel, fallbackLanguage, model, language, apiKey).forEach { field ->
             field.doAfterTextChanged { invalidateDiagnostics(); refreshButtons() }
         }
-        listOf(autoRecord, autoSwitch, trailingSpace, allowInsecure).forEach { toggle ->
+        listOf(autoRecord, autoSwitch, trailingSpace, shiftEnter, allowInsecure).forEach { toggle ->
             toggle.setOnCheckedChangeListener { _, _ -> invalidateDiagnostics(); refreshButtons() }
         }
         findViewById<MaterialButton>(R.id.btn_permission).setOnClickListener {
@@ -152,6 +154,7 @@ class MainActivity : AppCompatActivity() {
         autoRecord = autoRecord.isChecked,
         autoSwitch = autoSwitch.isChecked,
         trailingSpace = trailingSpace.isChecked,
+        showShiftEnter = shiftEnter.isChecked,
         allowInsecure = allowInsecure.isChecked,
     )
 
@@ -172,6 +175,7 @@ class MainActivity : AppCompatActivity() {
                 autoRecord.isChecked = settings.autoRecord
                 autoSwitch.isChecked = settings.autoSwitch
                 trailingSpace.isChecked = settings.trailingSpace
+                shiftEnter.isChecked = settings.showShiftEnter
                 allowInsecure.isChecked = settings.allowInsecure
                 savedSettings = settings
                 loaded = true
@@ -195,6 +199,7 @@ class MainActivity : AppCompatActivity() {
                         autoRecord.isChecked = false
                         autoSwitch.isChecked = false
                         trailingSpace.isChecked = false
+                        shiftEnter.isChecked = false
                         allowInsecure.isChecked = defaults.allowInsecure
                         savedSettings = null
                         loaded = true
@@ -319,7 +324,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setBusy(value: Boolean) {
         busy = value
-        listOf(endpoint, fallbackEndpoint, fallbackApiKey, fallbackModel, fallbackLanguage, model, language, apiKey, autoRecord, autoSwitch, trailingSpace, allowInsecure)
+        listOf(endpoint, fallbackEndpoint, fallbackApiKey, fallbackModel, fallbackLanguage, model, language, apiKey, autoRecord, autoSwitch, trailingSpace, shiftEnter, allowInsecure)
             .forEach { it.isEnabled = loaded && !busy }
         saveButton.setText(if (value) R.string.settings_working else R.string.settings_btn_apply)
         refreshButtons()

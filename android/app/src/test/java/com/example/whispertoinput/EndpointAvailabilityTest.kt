@@ -38,6 +38,24 @@ class EndpointAvailabilityTest {
         servers.forEach { it.shutdown() }
     }
 
+    @Test fun manualRefreshChecksBothEvenWhenMainRecovers() = runBlocking {
+        val checked = mutableListOf<AppSettings>()
+        val selector = EndpointAvailability { checked += it; true }
+        assertEquals(settings, selector.select(settings, checkBoth = true))
+        assertEquals(listOf(settings.endpoint, settings.fallbackEndpoint), checked.map { it.endpoint })
+        assertEquals(settings.fallbackApiKey, checked.last().apiKey)
+    }
+
+    @Test fun manualRefreshRestoresEitherRecoveredEndpoint() = runBlocking {
+        var recovered: String? = null
+        val selector = EndpointAvailability { it.endpoint == recovered }
+        assertNull(selector.select(settings, checkBoth = true))
+        recovered = settings.fallbackEndpoint
+        assertEquals(recovered, selector.select(settings, checkBoth = true)?.endpoint)
+        recovered = settings.endpoint
+        assertEquals(recovered, selector.select(settings, checkBoth = true)?.endpoint)
+    }
+
     @Test fun healthyMainSkipsFallback() = runBlocking {
         val checked = mutableListOf<String>()
         val selector = EndpointAvailability { checked += it.endpoint; true }

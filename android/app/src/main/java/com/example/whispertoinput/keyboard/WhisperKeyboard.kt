@@ -19,6 +19,8 @@
 
 package com.example.whispertoinput.keyboard
 
+import android.content.res.ColorStateList
+import androidx.core.content.ContextCompat
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
@@ -42,6 +44,8 @@ class WhisperKeyboard {
     private var keyboardView: View? = null
     private var buttonMic: ImageButton? = null
     private var buttonEnter: ImageButton? = null
+    private var buttonShiftEnter: View? = null
+    private var onRefreshEndpoints: () -> Unit = {}
     private var buttonCancel: ImageButton? = null
     private var buttonRetry: ImageButton? = null
     private var buttonSpaceBar: ImageButton? = null
@@ -63,6 +67,8 @@ class WhisperKeyboard {
         onSwitchIme: () -> Unit,
         onOpenSettings: () -> Unit,
         shouldShowRetry: () -> Boolean,
+        onShiftEnter: () -> Unit = {},
+        onRefreshEndpoints: () -> Unit = {},
     ): View {
         buttonBackspace?.stopRepeating()
         this.onStartRecording = onStartRecording
@@ -70,10 +76,15 @@ class WhisperKeyboard {
         this.onStartTranscribing = onStartTranscribing
         this.onCancelTranscribing = onCancelTranscribing
         this.shouldShowRetry = shouldShowRetry
+        this.onRefreshEndpoints = onRefreshEndpoints
         val view = layoutInflater.inflate(R.layout.keyboard_view, null)
         keyboardView = view
         buttonMic = view.findViewById(R.id.btn_mic)
         buttonEnter = view.findViewById(R.id.btn_enter)
+        buttonShiftEnter = view.findViewById(R.id.btn_shift_enter)
+        buttonShiftEnter?.setOnClickListener {
+            if (keyboardStatus == KeyboardStatus.Idle) onShiftEnter()
+        }
         buttonCancel = view.findViewById(R.id.btn_cancel)
         buttonRetry = view.findViewById(R.id.btn_retry)
         buttonSpaceBar = view.findViewById(R.id.btn_space_bar)
@@ -84,7 +95,7 @@ class WhisperKeyboard {
         amplitudeRing = view.findViewById(R.id.mic_amplitude_ring)
         buttonMic?.setOnClickListener {
             when (keyboardStatus) {
-                KeyboardStatus.Idle -> tryStartRecording()
+                KeyboardStatus.Idle -> if (endpointStatus == R.string.endpoint_unavailable) this.onRefreshEndpoints() else tryStartRecording()
                 KeyboardStatus.Recording -> tryStartTranscribing("")
                 KeyboardStatus.Transcribing -> Unit
             }
@@ -149,6 +160,10 @@ class WhisperKeyboard {
         setKeyboardStatus(KeyboardStatus.Idle)
     }
 
+    fun setShowShiftEnter(show: Boolean) {
+        buttonShiftEnter?.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
     fun setEndpointStatus(status: Int) {
         endpointStatus = status
         render()
@@ -167,7 +182,8 @@ class WhisperKeyboard {
     }
 
     fun tryStartRecording() {
-        if (keyboardView == null || sensitiveInput || keyboardStatus != KeyboardStatus.Idle) return
+        if (keyboardView == null || sensitiveInput || keyboardStatus != KeyboardStatus.Idle ||
+            endpointStatus == R.string.endpoint_unavailable || endpointStatus == R.string.testing_connection) return
         errorMessage = null
         setKeyboardStatus(KeyboardStatus.Recording)
         onStartRecording()
@@ -225,13 +241,26 @@ class WhisperKeyboard {
         }
         labelStatus?.setText(status)
         labelHint?.text = hint
+        val unavailable = !active && endpointStatus == R.string.endpoint_unavailable
+        val checking = !active && endpointStatus == R.string.testing_connection
+        buttonShiftEnter?.apply {
+            isEnabled = !active
+            alpha = if (active) 0.38f else 1f
+        }
         buttonMic?.apply {
-            isEnabled = !sensitiveInput && !transcribing
+            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context,
+                if (unavailable || checking) R.color.endpoint_refresh_background else R.color.app_primary))
+            isEnabled = !sensitiveInput && !transcribing && !checking
             alpha = if (sensitiveInput) 0.38f else 1f
-            setImageResource(if (recording) R.drawable.ic_dictation_stop else R.drawable.ic_dictation_mic)
+            setImageResource(when {
+                recording -> R.drawable.ic_dictation_stop
+                unavailable || checking -> R.drawable.ic_dictation_retry
+                else -> R.drawable.ic_dictation_mic
+            })
             imageAlpha = if (transcribing) 0 else 255
             contentDescription = context.getString(when {
                 sensitiveInput -> R.string.keyboard_sensitive
+                unavailable || checking -> R.string.refresh_endpoints
                 recording -> R.string.stop_speech_to_text
                 transcribing -> R.string.transcribing
                 else -> R.string.start_speech_to_text

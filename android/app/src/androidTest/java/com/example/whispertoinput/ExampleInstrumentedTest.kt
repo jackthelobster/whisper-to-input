@@ -62,6 +62,7 @@ class ExampleInstrumentedTest {
                 keyboard.setSensitiveInput(true)
                 pressBack() // Password/private field.
                 keyboard.setSensitiveInput(false)
+                keyboard.setEndpointStatus(R.string.keyboard_ready)
                 keyboard.tryStartRecording()
                 pressBack() // Listening.
                 keyboard.tryStartTranscribing("")
@@ -69,6 +70,48 @@ class ExampleInstrumentedTest {
                 keyboard.showError("Test transcription error")
                 pressBack()
                 assertEquals(5, switchRequests)
+                keyboard.reset()
+            }
+        }
+    }
+
+    @Test fun optionalShiftEnterShrinksSpaceAndOfflineMicRefreshes() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var recordings = 0
+                var refreshes = 0
+                var shiftedEnters = 0
+                val keyboard = WhisperKeyboard()
+                val view = keyboard.setup(activity.layoutInflater, { recordings++ }, {}, {}, {}, {}, {}, {}, {}, {},
+                    { false }, { shiftedEnters++ }, { refreshes++ })
+                val space = view.findViewById<View>(R.id.btn_space_bar)
+                val shift = view.findViewById<View>(R.id.btn_shift_enter)
+                fun measure() {
+                    view.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                }
+                measure()
+                val fullWidth = space.width
+                assertEquals(View.GONE, shift.visibility)
+                keyboard.setShowShiftEnter(true)
+                measure()
+                assertTrue(space.width < fullWidth)
+                assertTrue(shift.right <= space.left)
+                shift.performClick()
+                assertEquals(1, shiftedEnters)
+                keyboard.setShowShiftEnter(false)
+                measure()
+                assertEquals(fullWidth, space.width)
+                val mic = view.findViewById<View>(R.id.btn_mic)
+                keyboard.setEndpointStatus(R.string.endpoint_unavailable)
+                mic.performClick()
+                assertEquals(1, refreshes)
+                assertEquals(0, recordings)
+                assertEquals(activity.getString(R.string.refresh_endpoints), mic.contentDescription)
+                keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
+                mic.performClick()
+                assertEquals(1, recordings)
                 keyboard.reset()
             }
         }
@@ -85,6 +128,7 @@ class ExampleInstrumentedTest {
                 assertEquals(activity.getString(R.string.endpoint_unavailable), status.text.toString())
                 keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
                 assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
+                keyboard.setEndpointStatus(R.string.keyboard_ready)
                 keyboard.tryStartRecording()
                 keyboard.setEndpointStatus(R.string.keyboard_ready)
                 assertEquals(activity.getString(R.string.recording), status.text.toString())
@@ -144,9 +188,22 @@ class ExampleInstrumentedTest {
                     view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
                     view.layout(0, 0, view.measuredWidth, view.measuredHeight)
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-$label")
+                    keyboard.setShowShiftEnter(true)
+                    view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                    val shiftEnter = view.findViewById<View>(R.id.btn_shift_enter)
+                    val enter = view.findViewById<View>(R.id.btn_enter)
+                    assertEquals(View.VISIBLE, shiftEnter.visibility)
+                    assertEquals(enter.width, shiftEnter.width)
+                    assertEquals(enter.height, shiftEnter.height)
+                    capture(view, activity.getExternalFilesDir(null)!!, "keyboard-shift-enter-$label")
+                    keyboard.setShowShiftEnter(false)
+                    view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
                     keyboard.setSensitiveInput(true)
                     assertFalse(view.findViewById<View>(R.id.btn_mic).isEnabled)
                     keyboard.setSensitiveInput(false)
+                    keyboard.setEndpointStatus(R.string.keyboard_ready)
                     keyboard.tryStartRecording()
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-listening-$label")
                     keyboard.reset()

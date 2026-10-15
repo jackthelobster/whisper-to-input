@@ -16,15 +16,17 @@ import kotlin.coroutines.resume
 class EndpointAvailability(
     private val probe: suspend (AppSettings) -> Boolean = EndpointProbe()::isAvailable
 ) {
-    suspend fun select(settings: AppSettings): AppSettings? {
-        if (probe(settings)) return settings
-        if (settings.fallbackEndpoint.isBlank()) return null
+    suspend fun select(settings: AppSettings, checkBoth: Boolean = false): AppSettings? {
+        val primaryReady = probe(settings)
+        if (primaryReady && !checkBoth) return settings
+        if (settings.fallbackEndpoint.isBlank()) return settings.takeIf { primaryReady }
         val fallback = settings.copy(
             endpoint = settings.fallbackEndpoint, apiKey = settings.fallbackApiKey,
             model = settings.fallbackModel, language = settings.fallbackLanguage,
             fallbackEndpoint = "", fallbackApiKey = ""
         )
-        return fallback.takeIf { probe(it) }
+        val fallbackReady = probe(fallback)
+        return if (primaryReady) settings else fallback.takeIf { fallbackReady }
     }
 }
 

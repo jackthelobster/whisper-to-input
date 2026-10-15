@@ -137,7 +137,7 @@
         android:contentDescription="@string/retry_dictation"
         android:visibility="invisible"
         app:srcCompat="@drawable/ic_dictation_retry"
-        app:layout_constraintStart_toStartOf="@id/btn_space_bar"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@id/btn_mic_frame"
         app:layout_constraintBottom_toBottomOf="@id/btn_mic_frame" />
     <com.example.whispertoinput.keyboard.BackspaceButton
@@ -149,6 +149,36 @@
         app:layout_constraintTop_toTopOf="@id/btn_mic_frame"
         app:layout_constraintBottom_toBottomOf="@id/btn_mic_frame" />
 
+    <LinearLayout
+        android:id="@+id/btn_shift_enter"
+        style="@style/KeyboardKey"
+        android:layout_marginEnd="8dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="@string/shift_enter_key"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/btn_space_bar"
+        app:layout_constraintBottom_toBottomOf="parent">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/shift_key_label"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="@color/app_on_surface"
+            android:includeFontPadding="false"
+            android:importantForAccessibility="no" />
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            app:srcCompat="@drawable/ic_dictation_enter"
+            app:tint="@color/app_on_surface"
+            android:importantForAccessibility="no" />
+    </LinearLayout>
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/btn_space_bar"
         style="@style/KeyboardKey"
@@ -157,7 +187,7 @@
         android:layout_marginEnd="8dp"
         android:contentDescription="@string/desc_space_bar"
         app:srcCompat="@drawable/ic_dictation_space"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toEndOf="@id/btn_shift_enter"
         app:layout_constraintEnd_toStartOf="@id/btn_enter"
         app:layout_constraintTop_toBottomOf="@id/btn_mic_frame"
         app:layout_constraintBottom_toBottomOf="parent" />

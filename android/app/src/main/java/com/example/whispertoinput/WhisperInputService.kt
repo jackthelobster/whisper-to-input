@@ -119,6 +119,8 @@ class WhisperInputService : InputMethodService() {
             { onSwitchIme() },
             { onOpenSettings() },
             { shouldShowRetry() },
+            { onShiftEnter() },
+            { onRefreshEndpoints() },
         )
         keyboardReady = true
         whisperKeyboard.setSensitiveInput(true)
@@ -182,6 +184,19 @@ class WhisperInputService : InputMethodService() {
         whisperKeyboard.reset()
         whisperKeyboard.setEndpointStatus(R.string.testing_connection)
         if (!allowed) return
+        startAvailabilityChecks(session)
+    }
+
+    private fun onRefreshEndpoints() {
+        val session = activeSession ?: return
+        if (!isCurrentDictationTarget(session)) return
+        session.userInteracted = true
+        startAvailabilityChecks(session, checkBoth = true)
+    }
+
+    private fun startAvailabilityChecks(session: EditorSession, checkBoth: Boolean = false) {
+        settingsJob?.cancel()
+        whisperKeyboard.setEndpointStatus(R.string.testing_connection)
         settingsJob = serviceScope.launch {
             while (isCurrentDictationTarget(session)) {
                 val started = SystemClock.elapsedRealtime()
@@ -190,7 +205,9 @@ class WhisperInputService : InputMethodService() {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null }
-                val selected = settings?.let { availability.select(it) }
+                if (!isCurrentDictationTarget(session)) return@launch
+                whisperKeyboard.setShowShiftEnter(settings?.showShiftEnter == true)
+                val selected = settings?.let { availability.select(it, checkBoth) }
                 if (!isCurrentDictationTarget(session)) return@launch
                 session.settings = settings
                 session.selectedSettings = selected
@@ -379,6 +396,13 @@ class WhisperInputService : InputMethodService() {
         if (action != null && session.connection.performEditorAction(action)) return
         session.connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
         session.connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+    }
+
+    private fun onShiftEnter() {
+        val session = activeSession ?: return
+        if (!isCurrentTarget(session) || session.transcribing || recorderManager?.isRecording == true) return
+        session.userInteracted = true
+        EditorOperations.shiftEnter(session.connection)
     }
 
     private fun onSpaceBar() {

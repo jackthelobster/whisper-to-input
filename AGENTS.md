@@ -24,7 +24,7 @@ Read these files again if the build configuration changes:
 
 ## Primary route: verified GitHub Actions build
 
-**The delivered APK was built on GitHub Actions, not natively on Termux.** Use `.github/workflows/android.yml` as the executable source of truth. Its build runner is `ubuntu-24.04`, with Temurin JDK 17, the checked-in Gradle wrapper and the runner's Linux Android SDK. Do not add the Termux AAPT2 override or phone-specific worker/compiler flags to this route.
+**The historical `v0.5.0-andrew.1` APK was built on GitHub Actions.** A signed local Termux build has since succeeded; see the local route below. Use `.github/workflows/android.yml` as the executable source of truth. Its build runner is `ubuntu-24.04`, with Temurin JDK 17, the checked-in Gradle wrapper and the runner's Linux Android SDK. Do not add the Termux AAPT2 override or phone-specific worker/compiler flags to this route.
 
 The previously delivered `v0.5.0-andrew.1` APK came from successful push run `37134115716`, with application/test commit `41c139b3f9f076db1ed992f27968fd9c6047a4c5`. The accompanying documentation-only release commit was `37f5a52ecd8e3830989c3d6ef0d76ceda9f21546`. These identify a historical verified build, not verification of later commits or the current dirty working tree.
 
@@ -111,9 +111,34 @@ Stop if the file or hash check fails. The downloaded signed APK is `build/output
 
 Review the signature/manifest reports, parse the actual JUnit XML for totals/failures/skips, inspect device-test results and visually review the screenshots. A build job alone or the presence of cached APKs is insufficient. If publishing a release, obtain authorization, keep the license/corresponding source and evidence with the APK, then download the uploaded APK again and compare its SHA-256. A documentation-only commit after verification must be proved not to change application/tests/build files, with both source identities recorded.
 
-## Alternative route: native Termux build (not yet verified)
+## Taking app screenshots
 
-The remaining numbered sections are a proposed **local Termux alternative**, not the procedure used for the delivered APK. When these instructions were originally written, the host lacked Java, native build tools and a configured SDK. Inspect current prerequisites before trying this route; package candidates and shell-syntax checks are not proof of a working native build. Do not install tools or call this route verified without authorization and an actual successful assembly.
+Use the Android 12 emulator workflow above for reproducible screenshots. Check for an available emulator/ADB connection before promising a local capture; a successful native Termux APK build does not provide an emulator. CI captures the selected remote commit, so local uncommitted UI changes must first reach that revision with authorization for any commit/push/dispatch. Follow sections 1–4 above to select, run and verify the exact source and download its artifacts; reuse an automatic push run rather than dispatching a duplicate.
+
+The screenshot harness is `settingsAndKeyboardRenderLightAndDarkAtS10eWidth` in `android/app/src/androidTest/java/com/example/whispertoinput/ExampleInstrumentedTest.kt`. It renders settings and keyboard views on the API 31 emulator in light and dark mode, using dummy data. Its `capture()` helper calls `view.draw(Canvas(bitmap))`; these PNGs show app views, not full-device screenshots with system bars or proof of a live microphone/server interaction. Keep production `FLAG_SECURE` enabled and do not add storage permissions or capture real credentials.
+
+For additional UI states, extend this test using the keyboard's public state methods, measure/layout views before capture when geometry changes, and give each capture a distinct filename. Retry requires both `showError(...)` and a `shouldShowRetry` callback returning `true` (representing retained audio); assert `btn_retry` is visible before capturing it. An error message alone can leave retry hidden. Preserve the existing IME selection tests and screenshot export.
+
+The helper initially writes PNGs under the app's external-files `screenshots/` directory, then exports them to `/sdcard/whisper-verification` using the instrumentation shell identity **before AGP uninstalls the test app**. Keep that export: files in the app directory disappear at teardown. `UiAutomation.executeShellCommand` runs a process directly, so do not assume shell operators or quoting are interpreted. The workflow pulls the exported directory into `android/app/build/screenshots/whisper-verification` and uploads it in `android12-device-verification`.
+
+After the run/SHA and artifact checks in section 4, locate the downloaded images:
+
+```sh
+: "${VERIFY_DIR:?Set the run-specific artifact directory from section 4}"
+SCREENSHOT_DIR="$VERIFY_DIR/device/screenshots/whisper-verification"
+test -d "$SCREENSHOT_DIR"
+find "$SCREENSHOT_DIR" -maxdepth 1 -type f -name '*.png' -print
+```
+
+Expected captures are `settings-{light,dark}.png`, `keyboard-{light,dark}.png`, `keyboard-listening-{light,dark}.png` and `keyboard-retry-{light,dark}.png`. Open the actual PNGs with the available image-viewing tool and inspect alignment, backgrounds, text clipping and the requested states in both themes. Parse device JUnit XML under `$VERIFY_DIR/device/outputs/androidTest-results/`; do not infer test success from screenshots alone. Missing states or invisible controls require fixing the fixture and rerunning, not accepting the filename as evidence.
+
+When reporting, include the run URL, exact source SHA, emulator configuration, actual test results, and absolute image links (or embedded images). Keep screenshots/reports outside the checkout in the run-specific verification directory. Historical example: run `38631573890`, source `d45d54fd5ecc058c0f25d3559ead5ee6737f2bd1`, produced the light/dark retry captures reviewed on 2026-10-14; this does not verify later working-tree changes. Report debug emulator rendering separately from release runtime or physical-handset acceptance.
+
+## Local route: verified native Termux build
+
+Use this route when the user requests a local build. It requires no GitHub commit, push or workflow dispatch and includes the current working tree. On 2026-10-15, `:app:testDebugUnitTest :app:lintRelease :app:assembleRelease` succeeded locally with the original distribution key (unit tests were up-to-date). The resulting APK's certificate matched the historical GitHub APK. Its SHA-256 was `c07818530b0fb1882af7cf2d3546d458361992254f5baf95c886fe4a3fd5fefc`. This records that artifact only, not verification of future changes; installation and release runtime tests were not performed.
+
+Java 17, the SDK and Termux AAPT2 were available for that build. Inspect current prerequisites before installing anything; provisioning instructions below are for missing prerequisites. Use `bash ./gradlew` on Termux: direct execution of the checked-in wrapper can fail because its `/usr/bin/env` shebang is unavailable. Do not edit the wrapper to fix the host.
 
 ## 1. Install native Termux prerequisites
 
@@ -172,7 +197,7 @@ Check the SDK platform and wrapper before assembly:
 ```sh
 test -f "$ANDROID_HOME/platforms/android-35/android.jar"
 cd "$HOME/projects/whisper-to-input/android"
-./gradlew --version
+bash ./gradlew --version
 ```
 
 `ANDROID_HOME` avoids needing a `local.properties` file. If one already exists, inspect its non-secret SDK setting for a stale `sdk.dir`; a stale local setting can override the environment. `android/local.properties` is ignored by Git. Never commit it.
@@ -182,7 +207,7 @@ cd "$HOME/projects/whisper-to-input/android"
 From `android/`, run:
 
 ```sh
-./gradlew --no-daemon --max-workers=2 \
+bash ./gradlew --no-daemon --max-workers=2 \
   -Pandroid.aapt2FromMavenOverride="$PREFIX/bin/aapt2" \
   -Pkotlin.compiler.execution.strategy=in-process \
   :app:assembleDebug
@@ -201,7 +226,7 @@ Avoid `clean` for routine incremental builds. The project already limits the Gra
 ## 4. Run local verification
 
 ```sh
-./gradlew --no-daemon --max-workers=2 \
+bash ./gradlew --no-daemon --max-workers=2 \
   -Pandroid.aapt2FromMavenOverride="$PREFIX/bin/aapt2" \
   -Pkotlin.compiler.execution.strategy=in-process \
   :app:testDebugUnitTest :app:lintDebug
@@ -216,41 +241,86 @@ Review `app/build/reports/tests/testDebugUnitTest/`, `app/build/test-results/tes
 
 Instrumentation requires an actual connected Android test device or a compatible emulator; building its APK is not running its tests. Use the Linux Android 12 emulator job in `.github/workflows/android.yml` when there is no usable device connection. Do not claim handset dictation, microphone or keyboard acceptance from Gradle assembly alone.
 
-## 5. Build a signed distribution release
+## 5. Build a signed distribution release with the original key
 
-Use the existing distribution key, stored outside the repository. The Gradle configuration requires:
+For an update that preserves installed app data, use the original distribution signing identity. A default debug APK uses a different certificate and can produce “app conflicts with another package” when installed over the GitHub release. Building locally is compatible with updates when the application ID and signing identity match and the version code is not lower than the installed version. Never uninstall the release to work around this conflict.
 
-- `ANDROID_KEYSTORE_PATH`: absolute path to the private PKCS12 keystore.
-- `ANDROID_KEYSTORE_PASSWORD`: supplied privately through the environment.
-- Key alias: `whisper-dictation`.
+The existing Gradle release configuration reads `ANDROID_KEYSTORE_PATH` and `ANDROID_KEYSTORE_PASSWORD` and uses PKCS12 alias `whisper-dictation`. The local backup found on this phone is outside the checkout:
 
-Do not generate a replacement key for an update. Ask for the existing key if it is unavailable. Protect and back up that key outside the checkout.
+- Keystore: `$HOME/Synced/Backups/S21/whisper-to-input/signing/whisper-dictation.p12`
+- Password file: `$HOME/Synced/Backups/S21/whisper-to-input/signing/keystore-password`
+- Public certificate: `$HOME/Synced/Backups/S21/whisper-to-input/signing/signing-certificate.pem`
+- Expected certificate SHA-256: `bd068398a89597db9009b1350b013ac7aa8bbc5f205396f8b4513ce11f988853`
 
-Once the credentials are securely supplied:
+Do not generate a replacement key. If these files are unavailable, ask for the existing key and password through a private local mechanism. Keep backups protected outside the checkout. Never print or copy the password/key contents into chat, logs, commands, tracked files or shell history; do not enable shell tracing. The paths above identify files, not permission to disclose their contents.
+
+After setting the JDK/SDK environment from section 1, run from `android/`. This reads the password directly into a child-process environment and does not persist it in the calling shell:
 
 ```sh
-: "${ANDROID_KEYSTORE_PATH:?Existing distribution keystore required}"
-: "${ANDROID_KEYSTORE_PASSWORD:?Supply the password privately}"
-test -f "$ANDROID_KEYSTORE_PATH"
+uv run --no-project python - <<'PYTHON'
+import os
+import subprocess
+from pathlib import Path
 
-./gradlew --no-daemon --max-workers=2 \
-  -Pandroid.aapt2FromMavenOverride="$PREFIX/bin/aapt2" \
-  -Pkotlin.compiler.execution.strategy=in-process \
-  :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
-
-apksigner verify --verbose --print-certs \
-  app/build/outputs/apk/release/app-release.apk
-aapt dump badging app/build/outputs/apk/release/app-release.apk
-sha256sum app/build/outputs/apk/release/app-release.apk
-unset ANDROID_KEYSTORE_PASSWORD
+signing = Path.home() / "Synced/Backups/S21/whisper-to-input/signing"
+keystore = signing / "whisper-dictation.p12"
+password_file = signing / "keystore-password"
+assert keystore.is_file() and password_file.is_file(), "Original signing files required"
+env = os.environ.copy()
+env["ANDROID_KEYSTORE_PATH"] = str(keystore)
+env["ANDROID_KEYSTORE_PASSWORD"] = password_file.read_text().rstrip("\r\n")
+assert env["ANDROID_KEYSTORE_PASSWORD"], "Signing password is empty"
+result = subprocess.run([
+    "bash", "./gradlew", "--no-daemon", "--max-workers=2",
+    "-Pandroid.aapt2FromMavenOverride=" + str(Path(env["PREFIX"]) / "bin/aapt2"),
+    "-Pkotlin.compiler.execution.strategy=in-process",
+    ":app:testDebugUnitTest", ":app:lintRelease", ":app:assembleRelease",
+], env=env)
+raise SystemExit(result.returncode)
+PYTHON
 ```
 
-A release without the signing environment is unsigned, normally `app-release-unsigned.apk`; do not deliver it as installable. Check the certificate against the previous distribution APK before calling a release update-compatible. Release builds enable code minification and resource shrinking.
+Stop if Gradle fails. Do not accept an older cached APK as the new build. The output is `android/app/build/outputs/apk/release/app-release.apk`, relative to the repository root. A release without signing credentials is normally `app-release-unsigned.apk`; do not deliver it as installable. Release builds enable minification and resource shrinking.
+
+### Verify the signed local APK
+
+From `android/`, run the following after a successful build. Use the SDK's Java-based `apksigner.jar` and Termux-native AAPT2: the downloaded SDK's Linux `aapt` binary is x86-64 and cannot run natively on this ARM64 phone. A standalone `apksigner` command is not required.
+
+```sh
+uv run --no-project python - <<'PYTHON'
+import hashlib
+import os
+import subprocess
+from pathlib import Path
+
+apk = Path("app/build/outputs/apk/release/app-release.apk")
+jar = Path(os.environ["ANDROID_HOME"]) / "build-tools/35.0.0/lib/apksigner.jar"
+report = subprocess.check_output([
+    "java", "-jar", str(jar), "verify", "--verbose", "--print-certs", str(apk)
+], text=True)
+certificates = [line.split(": ", 1)[1] for line in report.splitlines()
+                if "certificate SHA-256 digest:" in line]
+assert certificates == ["bd068398a89597db9009b1350b013ac7aa8bbc5f205396f8b4513ce11f988853"], "Distribution certificate mismatch"
+(apk.parent / "signature.txt").write_text(report)
+badging = subprocess.check_output([
+    str(Path(os.environ["PREFIX"]) / "bin/aapt2"), "dump", "badging", str(apk)
+], text=True)
+(apk.parent / "badging.txt").write_text(badging)
+digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+(apk.parent / "SHA256SUMS").write_text(digest + "  app-release.apk\n")
+print(report)
+print(badging)
+print("SHA-256:", digest)
+print("APK:", apk.resolve())
+PYTHON
+```
+
+Stop on any verification or certificate mismatch. The expected certificate above was also checked against the actual APK from GitHub run `37134115716`, locally retained under `$HOME/projects/whisper-to-input-verification/run-37134115716/build/outputs/apk/release/app-release.apk`. When available, verify the previous installed/distributed APK with the same `apksigner.jar` and compare certificates directly. Inspect `badging.txt` for application ID `com.jackthelobster.whispertoinput` and the version code before claiming update compatibility. Parse the unit-test XML and review release lint results as described above; report cached tasks honestly. Keep generated reports beside the untracked APK. Installing the APK still requires the user's request; successful assembly and signature verification do not establish runtime acceptance.
 
 ## Troubleshooting and completion requirements
 
 - **`java: command not found` / invalid `JAVA_HOME`:** resolve the installed JDK first.
-- **SDK location missing:** check `ANDROID_HOME`, `platforms/android-35/android.jar`, licenses and any existing `local.properties`.
+- **SDK location missing:** explicitly export `ANDROID_HOME` and `ANDROID_SDK_ROOT` in the shell running Gradle; verify `platforms/android-35/android.jar`, licenses and any existing `local.properties`. If needed, write `sdk.dir` to ignored `android/local.properties` using the verified local SDK path. Never write an empty value or commit this file.
 - **AAPT2 daemon failure / executable format error:** run `$PREFIX/bin/aapt2 version` directly and confirm the Gradle command includes the override. Do not disable resource validation or lower `compileSdk` to hide the failure.
 - **Another SDK executable fails:** identify its exact path and architecture using `file`. Use a corresponding native Termux tool if available; do not replace unrelated SDK files or fabricate tools to satisfy existence checks.
 - **Download failure:** verify connectivity and the configured Google/Maven Central repositories; do not remove wrapper checksum validation or TLS verification. Offline mode only works after all dependencies are cached.

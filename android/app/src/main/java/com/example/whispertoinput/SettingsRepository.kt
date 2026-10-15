@@ -29,6 +29,7 @@ val MODEL = stringPreferencesKey("model")
 val AUTO_RECORDING_START = booleanPreferencesKey("is-auto-recording-start")
 val AUTO_SWITCH_BACK = booleanPreferencesKey("auto-switch-back")
 val ADD_TRAILING_SPACE = booleanPreferencesKey("add-trailing-space")
+val SHOW_SHIFT_ENTER = booleanPreferencesKey("show-shift-enter")
 val POSTPROCESSING = stringPreferencesKey("postprocessing")
 val ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-gx10")
 
@@ -76,6 +77,7 @@ class SettingsRepository internal constructor(
                     autoRecord = preferences[AUTO_RECORDING_START] ?: false,
                     autoSwitch = preferences[AUTO_SWITCH_BACK] ?: false,
                     trailingSpace = preferences[ADD_TRAILING_SPACE] ?: false,
+                    showShiftEnter = preferences[SHOW_SHIFT_ENTER] ?: false,
                     allowInsecure = preferences[ALLOW_INSECURE] ?: true
                 )
             } catch (e: CancellationException) {
@@ -112,6 +114,7 @@ class SettingsRepository internal constructor(
                         it[AUTO_RECORDING_START] = settings.autoRecord
                         it[AUTO_SWITCH_BACK] = settings.autoSwitch
                         it[ADD_TRAILING_SPACE] = settings.trailingSpace
+                        it[SHOW_SHIFT_ENTER] = settings.showShiftEnter
                         it[ALLOW_INSECURE] = settings.allowInsecure
                         it.remove(CREDENTIAL_RECOVERY_REQUIRED)
                     }
