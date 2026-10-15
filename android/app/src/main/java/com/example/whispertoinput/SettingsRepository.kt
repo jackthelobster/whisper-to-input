@@ -11,6 +11,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -44,8 +46,13 @@ class SettingsRepository internal constructor(
         KeystoreCredentialStore(context.applicationContext, ".fallback")
     )
 
+    private var cached: AppSettings? = null
+    private val revision = MutableStateFlow(0L)
+    val changes = revision.asStateFlow()
+
     suspend fun load(): AppSettings = withContext(Dispatchers.IO) {
         mutex.withLock {
+            cached?.let { return@withLock it }
             try {
                 val preferences = store.data.first()
                 if (preferences[CREDENTIAL_RECOVERY_REQUIRED] == true) {
@@ -79,7 +86,7 @@ class SettingsRepository internal constructor(
                     trailingSpace = preferences[ADD_TRAILING_SPACE] ?: false,
                     showShiftEnter = preferences[SHOW_SHIFT_ENTER] ?: false,
                     allowInsecure = preferences[ALLOW_INSECURE] ?: true
-                )
+                ).also { cached = it }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -92,6 +99,7 @@ class SettingsRepository internal constructor(
     suspend fun save(settings: AppSettings): Unit = withContext(Dispatchers.IO) {
         TranscriptionProtocol.validateSettings(settings)
         mutex.withLock {
+            cached = null
             try {
                 // Once persisting starts, finish both stores even if the UI is destroyed.
                 withContext(NonCancellable) {
@@ -118,11 +126,14 @@ class SettingsRepository internal constructor(
                         it[ALLOW_INSECURE] = settings.allowInsecure
                         it.remove(CREDENTIAL_RECOVERY_REQUIRED)
                     }
+                    cached = settings
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 throw TranscriptionException("Settings could not be saved securely. Please try again.")
+            } finally {
+                revision.value += 1
             }
         }
     }
@@ -142,6 +153,12 @@ class SettingsRepository internal constructor(
     }
 
     companion object {
+        @Volatile private var shared: SettingsRepository? = null
+
+        fun get(context: Context): SettingsRepository = shared ?: synchronized(this) {
+            shared ?: SettingsRepository(context.applicationContext).also { shared = it }
+        }
+
         const val DEFAULT_ENDPOINT = AppSettings.DEFAULT_ENDPOINT
         const val DEFAULT_MODEL = AppSettings.DEFAULT_MODEL
         // Serializes migration/save across independently constructed UI and service repositories.

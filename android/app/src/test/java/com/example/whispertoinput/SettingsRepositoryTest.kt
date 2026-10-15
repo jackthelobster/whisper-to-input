@@ -48,6 +48,28 @@ class SettingsRepositoryTest {
         }
     }
 
+    @Test fun repeatedLoadsUseCacheAndSavesReplaceIt() = runBlocking {
+        val credentials = MemoryCredentials()
+        val repository = SettingsRepository(MemoryStore(), credentials)
+        val first = repository.load()
+        credentials.failRead = true
+        assertEquals(first, repository.load())
+        val updated = first.copy(model = "updated-model")
+        repository.save(updated)
+        assertEquals(updated, repository.load())
+        assertEquals(1L, repository.changes.value)
+    }
+
+    @Test fun failedSaveInvalidatesPreviouslyCachedCredentials() = runBlocking {
+        val credentials = MemoryCredentials()
+        val repository = SettingsRepository(MemoryStore(), credentials)
+        val first = repository.load()
+        credentials.failWrite = true
+        try { repository.save(first); fail("Save must fail") } catch (_: TranscriptionException) { }
+        try { repository.load(); fail("Cache must be invalidated") } catch (_: TranscriptionException) { }
+        assertEquals(1L, repository.changes.value)
+    }
+
     private suspend fun assertRecoveryRequired(store: MemoryStore, credentials: MemoryCredentials) {
         assertNull(store.state.value[API_KEY])
         assertEquals(true, store.state.value[CREDENTIAL_RECOVERY_REQUIRED])

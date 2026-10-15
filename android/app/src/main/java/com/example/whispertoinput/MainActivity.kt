@@ -93,7 +93,7 @@ class MainActivity : AppCompatActivity() {
         listOf(R.id.setup_heading, R.id.server_heading, R.id.fallback_server_heading, R.id.behavior_heading).forEach {
             ViewCompat.setAccessibilityHeading(findViewById(it), true)
         }
-        repository = SettingsRepository(applicationContext)
+        repository = SettingsRepository.get(applicationContext)
         endpoint = findViewById(R.id.field_endpoint)
         fallbackEndpoint = findViewById(R.id.field_fallback_endpoint)
         fallbackApiKey = findViewById(R.id.field_fallback_api_key)
@@ -310,12 +310,8 @@ class MainActivity : AppCompatActivity() {
     private suspend fun checkConnection(settings: AppSettings) {
         testResult.visibility = View.VISIBLE
         testResult.setText(R.string.testing_connection)
-        val selected = availability.select(settings)
-        testResult.setText(when {
-            selected == null -> R.string.endpoint_unavailable
-            selected.endpoint != settings.endpoint -> R.string.keyboard_ready_fallback
-            else -> R.string.keyboard_ready
-        })
+        val result = availability.inspect(settings, checkBoth = true)
+        testResult.text = result.statusText(this)
     }
 
     private fun invalidateDiagnostics() {

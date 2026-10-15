@@ -20,6 +20,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class EndpointAvailabilityTest {
     private val settings = AppSettings(
         endpoint = "https://main.example/v1/audio/transcriptions", apiKey = "main-secret",
@@ -40,7 +41,7 @@ class EndpointAvailabilityTest {
 
     @Test fun manualRefreshChecksBothEvenWhenMainRecovers() = runBlocking {
         val checked = mutableListOf<AppSettings>()
-        val selector = EndpointAvailability { checked += it; true }
+        val selector = selector { checked += it; true }
         assertEquals(settings, selector.select(settings, checkBoth = true))
         assertEquals(listOf(settings.endpoint, settings.fallbackEndpoint), checked.map { it.endpoint })
         assertEquals(settings.fallbackApiKey, checked.last().apiKey)
@@ -48,24 +49,24 @@ class EndpointAvailabilityTest {
 
     @Test fun manualRefreshRestoresEitherRecoveredEndpoint() = runBlocking {
         var recovered: String? = null
-        val selector = EndpointAvailability { it.endpoint == recovered }
-        assertNull(selector.select(settings, checkBoth = true))
+        val selector = selector { it.endpoint == recovered }
+        assertNull(selector.select(settings))
         recovered = settings.fallbackEndpoint
-        assertEquals(recovered, selector.select(settings, checkBoth = true)?.endpoint)
+        assertEquals(recovered, selector.select(settings)?.endpoint)
         recovered = settings.endpoint
-        assertEquals(recovered, selector.select(settings, checkBoth = true)?.endpoint)
+        assertEquals(recovered, selector.select(settings)?.endpoint)
     }
 
-    @Test fun healthyMainSkipsFallback() = runBlocking {
+    @Test fun healthyMainChecksBoth() = runBlocking {
         val checked = mutableListOf<String>()
-        val selector = EndpointAvailability { checked += it.endpoint; true }
+        val selector = selector { checked += it.endpoint; true }
         assertEquals(settings, selector.select(settings))
-        assertEquals(listOf(settings.endpoint), checked)
+        assertEquals(listOf(settings.endpoint, settings.fallbackEndpoint), checked)
     }
 
     @Test fun failedMainImmediatelyChecksFallbackWithItsOwnCredential() = runBlocking {
         val checked = mutableListOf<AppSettings>()
-        val selector = EndpointAvailability { checked += it; it.endpoint == settings.fallbackEndpoint }
+        val selector = selector { checked += it; it.endpoint == settings.fallbackEndpoint }
         val selected = selector.select(settings)!!
         assertEquals(listOf(settings.endpoint, settings.fallbackEndpoint), checked.map { it.endpoint })
         assertEquals("fallback-secret", selected.apiKey)
@@ -74,10 +75,10 @@ class EndpointAvailabilityTest {
         assertEquals("", selected.fallbackEndpoint)
     }
 
-    @Test fun recoveredMainWinsOnNextCheckWithoutRecheckingFallback() = runBlocking {
+    @Test fun recoveredMainWinsOnNextParallelCheck() = runBlocking {
         var mainAvailable = false
         val checked = mutableListOf<String>()
-        val selector = EndpointAvailability {
+        val selector = selector {
             checked += it.endpoint
             it.endpoint == settings.fallbackEndpoint || mainAvailable
         }
@@ -85,28 +86,62 @@ class EndpointAvailabilityTest {
         mainAvailable = true
         checked.clear()
         assertEquals(settings.endpoint, selector.select(settings)!!.endpoint)
-        assertEquals(listOf(settings.endpoint), checked)
+        assertEquals(listOf(settings.endpoint, settings.fallbackEndpoint), checked)
     }
 
     @Test fun neitherAvailableReturnsNoEndpoint() = runBlocking {
         val checked = mutableListOf<String>()
-        assertNull(EndpointAvailability { checked += it.endpoint; false }.select(settings))
+        assertNull(selector { checked += it.endpoint; false }.select(settings))
         assertEquals(listOf(settings.endpoint, settings.fallbackEndpoint), checked)
     }
 
     @Test fun optionalFallbackIsNeverCheckedWhenBlank() = runBlocking {
         var count = 0
-        assertNull(EndpointAvailability { count++; false }.select(settings.copy(fallbackEndpoint = "")))
+        assertNull(selector { count++; false }.select(settings.copy(fallbackEndpoint = "")))
         assertEquals(1, count)
     }
 
-    @Test fun cancellationDoesNotContinueToFallback() = runBlocking {
-        var count = 0
-        try {
-            EndpointAvailability { count++; throw CancellationException() }.select(settings)
-            fail("Cancellation must propagate")
-        } catch (_: CancellationException) { }
-        assertEquals(1, count)
+    @Test fun probesRunConcurrentlyAndPreferPrimary() = kotlinx.coroutines.test.runTest {
+        val started = mutableSetOf<String>()
+        val bothStarted = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val selector = EndpointAvailability {
+            started += it.endpoint
+            if (started.size == 2) bothStarted.complete(Unit)
+            bothStarted.await()
+            kotlinx.coroutines.delay(3000)
+            ProbeResult.Ready
+        }
+        val before = testScheduler.currentTime
+        assertEquals(settings, selector.select(settings, checkBoth = true))
+        assertEquals(3000L, testScheduler.currentTime - before)
+    }
+
+    @Test fun healthyPrimaryDoesNotWaitForDeadFallback() = kotlinx.coroutines.test.runTest {
+        var fallbackCancelled = false
+        val selector = EndpointAvailability {
+            if (it.endpoint == settings.endpoint) ProbeResult.Ready else {
+                try { kotlinx.coroutines.awaitCancellation() } finally { fallbackCancelled = true }
+            }
+        }
+        assertEquals(settings, selector.select(settings))
+        assertTrue(fallbackCancelled)
+        assertEquals(0L, testScheduler.currentTime)
+    }
+
+    @Test fun cancellingSelectionCancelsBothProbes() = kotlinx.coroutines.test.runTest {
+        var cancelled = 0
+        val selector = EndpointAvailability {
+            try { kotlinx.coroutines.awaitCancellation() } finally { cancelled++ }
+        }
+        val task = async { selector.select(settings) }
+        testScheduler.runCurrent()
+        task.cancel()
+        task.join()
+        assertEquals(2, cancelled)
+    }
+
+    private fun selector(probe: suspend (AppSettings) -> Boolean) = EndpointAvailability {
+        if (probe(it)) ProbeResult.Ready else ProbeResult.Unreachable
     }
 
     private fun server() = MockWebServer().apply { start(); servers += this }
@@ -142,6 +177,51 @@ class EndpointAvailabilityTest {
             server.enqueue(response)
             assertFalse(probe.isAvailable(settings(server)))
         }
+    }
+
+    @Test fun probeReportsHttpModelAndProtocolFailuresSeparately() = runBlocking {
+        val server = server()
+        val probe = EndpointProbe(client())
+        server.enqueue(MockResponse().setResponseCode(401))
+        assertEquals(ProbeResult.HttpError(401), probe.check(settings(server)))
+        server.enqueue(MockResponse().setBody("{\"data\":[]}"))
+        assertEquals(ProbeResult.ModelMissing(AppSettings.DEFAULT_MODEL), probe.check(settings(server)))
+        server.enqueue(MockResponse().setBody("invalid json"))
+        assertEquals(ProbeResult.InvalidResponse, probe.check(settings(server)))
+        val target = settings(server)
+        server.shutdown()
+        assertEquals(ProbeResult.Unreachable, probe.check(target))
+    }
+
+    @Test fun probeDistinguishesHeaderAndBodyTimeouts() = runBlocking {
+        val server = server()
+        val client = client().newBuilder().readTimeout(150, TimeUnit.MILLISECONDS)
+            .build().also { clients += it }
+        val probe = EndpointProbe(client)
+        server.enqueue(models().setHeadersDelay(500, TimeUnit.MILLISECONDS))
+        assertEquals(ProbeResult.Timeout, probe.check(settings(server)))
+        server.enqueue(models().setBodyDelay(500, TimeUnit.MILLISECONDS))
+        assertEquals(ProbeResult.Timeout, probe.check(settings(server)))
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun overallCallTimeoutIsReportedAsTimeout() = runBlocking {
+        val server = server()
+        server.enqueue(models().setHeadersDelay(500, TimeUnit.MILLISECONDS))
+        val client = client().newBuilder().callTimeout(150, TimeUnit.MILLISECONDS)
+            .build().also { clients += it }
+        assertEquals(ProbeResult.Timeout, EndpointProbe(client).check(settings(server)))
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun selectionRetainsTimeoutEvenWhenFallbackWorks() = runBlocking {
+        val selector = EndpointAvailability {
+            if (it.endpoint == settings.endpoint) ProbeResult.Timeout else ProbeResult.Ready
+        }
+        val result = selector.inspect(settings)
+        assertTrue(result.timedOut)
+        assertEquals(settings.fallbackEndpoint, result.selected?.endpoint)
+        assertFalse(EndpointSelection(null, ProbeResult.Unreachable).timedOut)
     }
 
     @Test fun probeRefusesRedirectAndInsecureCredentials() = runBlocking {

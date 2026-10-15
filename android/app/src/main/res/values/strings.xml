@@ -133,8 +133,14 @@
     <string name="retry">Retry</string>
     <string name="keyboard_ready">Ready.</string>
     <string name="keyboard_ready_fallback">Ready. Using the fallback endpoint.</string>
-    <string name="endpoint_unavailable">Transcription endpoint unavailable.</string>
-    <string name="endpoint_unavailable_hint">Tap refresh to check both endpoints. Also retrying every 10 seconds.</string>
+    <string name="endpoint_unreachable">Cannot reach the server.</string>
+    <string name="endpoint_http_error">Server returned HTTP %1$d.</string>
+    <string name="endpoint_model_missing">Connected, but model “%1$s” is not on the server.</string>
+    <string name="endpoint_invalid_response">Connected, but the server returned an invalid model list.</string>
+    <string name="endpoint_both_failed">Primary: %1$s Fallback: %2$s</string>
+    <string name="endpoint_unavailable">Endpoint(s) unavailable</string>
+    <string name="endpoint_probe_timeout">Endpoint probe timeout</string>
+    <string name="endpoint_unavailable_hint">Tap refresh to check both endpoints.</string>
     <string name="settings_fallback_endpoint">Fallback URL</string>
     <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Main is checked first every 10 seconds. Leave the URL empty to disable fallback.</string>
     <string name="settings_fallback_api_key">API key (optional)</string>

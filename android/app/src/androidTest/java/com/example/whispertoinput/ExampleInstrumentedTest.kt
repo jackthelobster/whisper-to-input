@@ -128,6 +128,20 @@ class ExampleInstrumentedTest {
                 assertEquals(activity.getString(R.string.testing_connection), status.text.toString())
                 keyboard.setEndpointStatus(R.string.endpoint_unavailable)
                 assertEquals(activity.getString(R.string.endpoint_unavailable), status.text.toString())
+                val hint = view.findViewById<android.widget.TextView>(R.id.label_hint)
+                fun measureHeight(): Int {
+                    view.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                    return view.measuredHeight
+                }
+                keyboard.setEndpointStatus(R.string.keyboard_ready)
+                val readyHeight = measureHeight()
+                val timeout = activity.getString(R.string.endpoint_probe_timeout)
+                keyboard.setEndpointStatus(R.string.endpoint_unavailable, timeout)
+                assertEquals("Endpoint(s) unavailable", status.text.toString())
+                assertEquals("Endpoint probe timeout", hint.text.toString())
+                assertEquals(readyHeight, measureHeight())
                 keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
                 assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
                 keyboard.setEndpointStatus(R.string.keyboard_ready)

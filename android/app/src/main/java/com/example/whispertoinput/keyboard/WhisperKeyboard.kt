@@ -34,6 +34,7 @@ class WhisperKeyboard {
     private enum class KeyboardStatus { Idle, Recording, Transcribing }
     private var keyboardStatus = KeyboardStatus.Idle
     private var sensitiveInput = false
+    private var endpointDetail: String? = null
     private var endpointStatus = R.string.testing_connection
     private var errorMessage: String? = null
     private var onStartRecording: () -> Unit = {}
@@ -164,8 +165,9 @@ class WhisperKeyboard {
         buttonShiftEnter?.visibility = if (show) View.VISIBLE else View.GONE
     }
 
-    fun setEndpointStatus(status: Int) {
+    fun setEndpointStatus(status: Int, detail: String? = null) {
         endpointStatus = status
+        endpointDetail = detail
         render()
     }
 
@@ -235,7 +237,8 @@ class WhisperKeyboard {
             recording -> context.getString(R.string.keyboard_recording_hint)
             transcribing -> context.getString(R.string.keyboard_transcribing_hint)
             errorMessage != null -> errorMessage
-            endpointStatus == R.string.endpoint_unavailable -> context.getString(R.string.endpoint_unavailable_hint)
+            endpointStatus == R.string.endpoint_unavailable -> endpointDetail
+                ?: context.getString(R.string.endpoint_unavailable_hint)
             endpointStatus == R.string.testing_connection -> context.getString(R.string.testing_connection)
             else -> context.getString(R.string.keyboard_ready_hint)
         }

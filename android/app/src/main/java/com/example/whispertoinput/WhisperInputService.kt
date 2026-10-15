@@ -23,6 +23,7 @@ import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -38,7 +39,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import android.os.SystemClock
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.LinkProperties
+import kotlinx.coroutines.flow.drop
 import java.io.File
 
 private const val AUDIO_MEDIA_TYPE_M4A = "audio/mp4"
@@ -51,6 +56,17 @@ class WhisperInputService : InputMethodService() {
     private var recorderManager: RecorderManager? = null
     private var settingsJob: Job? = null
     private val availability = EndpointAvailability()
+    private val repository by lazy { SettingsRepository.get(this) }
+    private var networkCallbackRegistered = false
+    private var networkRefreshJob: Job? = null
+    private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) = refreshAfterNetworkChange()
+        override fun onLost(network: Network) = refreshAfterNetworkChange()
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = refreshAfterNetworkChange()
+        override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) = refreshAfterNetworkChange()
+    }
+
     private var generation = 0L
     private var requestGeneration = 0L
     private var windowShown = false
@@ -72,12 +88,33 @@ class WhisperInputService : InputMethodService() {
         var settings: AppSettings? = null
         var selectedSettings: AppSettings? = null
         var userInteracted = false
+        var endpointProbeTimedOut = false
         var audio: File? = null
         var transcribing = false
     }
 
+    private fun refreshAfterNetworkChange() {
+        serviceScope.launch {
+            // Connectivity delivers availability, capabilities and routes in a burst.
+            networkRefreshJob?.cancel()
+            networkRefreshJob = serviceScope.launch refresh@{
+                delay(150)
+                val session = activeSession ?: return@refresh
+                if (isCurrentDictationTarget(session) && !session.endpointProbeTimedOut) startAvailabilityChecks(session)
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
+        connectivity.registerDefaultNetworkCallback(networkCallback)
+        networkCallbackRegistered = true
+        serviceScope.launch {
+            repository.changes.drop(1).collect {
+                val session = activeSession
+                if (session != null && isCurrentDictationTarget(session)) startAvailabilityChecks(session)
+            }
+        }
         recorderManager = RecorderManager(this).apply {
             setOnUpdateMicrophoneAmplitude { amplitude ->
                 val session = activeSession
@@ -196,32 +233,41 @@ class WhisperInputService : InputMethodService() {
 
     private fun startAvailabilityChecks(session: EditorSession, checkBoth: Boolean = false) {
         settingsJob?.cancel()
+        session.endpointProbeTimedOut = false
         whisperKeyboard.setEndpointStatus(R.string.testing_connection)
         settingsJob = serviceScope.launch {
+            val schedule = EndpointPollSchedule()
+            var checkAll = checkBoth
             while (isCurrentDictationTarget(session)) {
                 val started = SystemClock.elapsedRealtime()
                 val settings = try {
-                    SettingsRepository(this@WhisperInputService).load()
+                    repository.load()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null }
                 if (!isCurrentDictationTarget(session)) return@launch
                 whisperKeyboard.setShowShiftEnter(settings?.showShiftEnter == true)
-                val selected = settings?.let { availability.select(it, checkBoth) }
+                val result = settings?.let { availability.inspect(it, checkAll) }
+                checkAll = false
+                val selected = result?.selected
                 if (!isCurrentDictationTarget(session)) return@launch
                 session.settings = settings
                 session.selectedSettings = selected
+                session.endpointProbeTimedOut = result?.timedOut == true
                 whisperKeyboard.setEndpointStatus(when {
                     selected == null -> R.string.endpoint_unavailable
-                    selected.endpoint != settings?.endpoint -> R.string.keyboard_ready_fallback
+                    selected.endpoint != settings.endpoint -> R.string.keyboard_ready_fallback
                     else -> R.string.keyboard_ready
-                })
+                }, result?.statusText(this@WhisperInputService) ?: getString(R.string.settings_load_failed))
                 // A late check must never restart a microphone after a manual gesture.
-                if (selected != null && settings?.autoRecord == true && !session.userInteracted &&
+                if (selected != null && settings.autoRecord == true && !session.userInteracted &&
                     session.audio == null && !session.transcribing && recorderManager?.isRecording == false) {
                     whisperKeyboard.tryStartRecording()
                 }
-                delay((10_000L - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(1L))
+                // A timeout waits for an explicit refresh, settings change, or a new session.
+                if (result?.timedOut == true) return@launch
+                val interval = schedule.nextDelayMillis(selected != null)
+                delay((interval - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(1L))
             }
         }
     }
@@ -458,6 +504,10 @@ class WhisperInputService : InputMethodService() {
         recorderManager?.close()
         recorderManager = null
         whisperTranscriber.close()
+        if (networkCallbackRegistered) {
+            connectivity.unregisterNetworkCallback(networkCallback)
+            networkCallbackRegistered = false
+        }
         serviceScope.cancel()
         keyboardReady = false
         super.onDestroy()

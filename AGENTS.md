@@ -113,7 +113,7 @@ Review the signature/manifest reports, parse the actual JUnit XML for totals/fai
 
 ## Taking app screenshots
 
-Use the Android 12 emulator workflow above for reproducible screenshots. Check for an available emulator/ADB connection before promising a local capture; a successful native Termux APK build does not provide an emulator. CI captures the selected remote commit, so local uncommitted UI changes must first reach that revision with authorization for any commit/push/dispatch. Follow sections 1–4 above to select, run and verify the exact source and download its artifacts; reuse an automatic push run rather than dispatching a duplicate.
+For screenshots or a live app preview without GitHub, use the verified Android 12 emulator on `comet` described below. The GitHub Actions workflow above remains available for CI verification. Check the selected emulator/ADB connection before promising captures; a successful native Termux APK build does not provide an emulator. Comet can build a copy of the current working tree without committing it. CI captures the selected remote commit, so uncommitted UI changes must first reach that revision with authorization for any commit/push/dispatch. For CI, follow sections 1–4 above and reuse an automatic push run rather than dispatching a duplicate.
 
 The screenshot harness is `settingsAndKeyboardRenderLightAndDarkAtS10eWidth` in `android/app/src/androidTest/java/com/example/whispertoinput/ExampleInstrumentedTest.kt`. It renders settings and keyboard views on the API 31 emulator in light and dark mode, using dummy data. Its `capture()` helper calls `view.draw(Canvas(bitmap))`; these PNGs show app views, not full-device screenshots with system bars or proof of a live microphone/server interaction. Keep production `FLAG_SECURE` enabled and do not add storage permissions or capture real credentials.
 
@@ -130,9 +130,121 @@ test -d "$SCREENSHOT_DIR"
 find "$SCREENSHOT_DIR" -maxdepth 1 -type f -name '*.png' -print
 ```
 
-Expected captures are `settings-{light,dark}.png`, `keyboard-{light,dark}.png`, `keyboard-listening-{light,dark}.png` and `keyboard-retry-{light,dark}.png`. Open the actual PNGs with the available image-viewing tool and inspect alignment, backgrounds, text clipping and the requested states in both themes. Parse device JUnit XML under `$VERIFY_DIR/device/outputs/androidTest-results/`; do not infer test success from screenshots alone. Missing states or invisible controls require fixing the fixture and rerunning, not accepting the filename as evidence.
+Expected captures are `settings-{light,dark}.png`, `keyboard-{light,dark}.png`, `keyboard-listening-{light,dark}.png`, `keyboard-retry-{light,dark}.png` and `keyboard-shift-enter-{light,dark}.png` (ten PNGs). Open the actual PNGs with the available image-viewing tool and inspect alignment, backgrounds, text clipping and the requested states in both themes. Parse device JUnit XML under `$VERIFY_DIR/device/outputs/androidTest-results/`; do not infer test success from screenshots alone. Missing states or invisible controls require fixing the fixture and rerunning, not accepting the filename as evidence.
 
 When reporting, include the run URL, exact source SHA, emulator configuration, actual test results, and absolute image links (or embedded images). Keep screenshots/reports outside the checkout in the run-specific verification directory. Historical example: run `38631573890`, source `d45d54fd5ecc058c0f25d3559ead5ee6737f2bd1`, produced the light/dark retry captures reviewed on 2026-10-14; this does not verify later working-tree changes. Report debug emulator rendering separately from release runtime or physical-handset acceptance.
+
+## Android 12 emulator on comet: builds, screenshots and live view
+
+Use `ssh andrew@comet`. This is an x86-64 Lubuntu VMware VM with 8 GiB RAM and four virtual CPUs. Nested virtualization is enabled; `andrew` belongs to `kvm`, and `emulator -accel-check` verified usable KVM. If `/dev/kvm` disappears or the emulator reports missing `vmx`/`svm`, shut down the VM and enable VMware's **Virtualize Intel VT-x/EPT or AMD-V/RVI** processor setting on its host. A guest package install cannot expose that CPU feature. Reconnect/log in after changing group membership.
+
+### Installed environment and live desktop
+
+- Build JDK: OpenJDK 17. Source `~/Android/Sdk/env.sh` in each remote build shell; it sets the SDK environment and Java 17.
+- SDK management JDK: OpenJDK 21, selected by `~/android-setup/sdkmanager.sh`. Use that wrapper for SDK queries/installation; the current command-line tools require the newer Java runtime. Review any new licenses interactively.
+- Installed SDK: Platform 35, Build Tools 34.0.0 and 35.0.0, Platform Tools 37.0.1, Emulator 37.2.12, command-line tools 22.0. These are recorded versions, not instructions to upgrade them on every run.
+- AVD: `whisper-api31`, using `system-images;android-31;default;x86_64` revision 5 (standard AOSP Android 12). It has 1080 × 2280 pixels, 480 dpi, 2048 MiB guest RAM, two guest CPUs, software graphics and a 2048M data partition. It does **not** use CI's `google_apis` image. No additional Preview license was accepted for this setup.
+- Initial source copy: `~/projects/whisper-to-input`; Gradle cache: `~/.gradle`. Inspect free space before large downloads/builds: the VM's 30 GiB disk had about 6.5 GiB free after initial verification.
+- Host-only helpers and logs: `~/android-setup/`. These scripts are outside the repository; inspect them before reuse. `latest-verification.md` records the initial successful build. Initial `sdk.log` contains a superseded Google APIs license attempt; `sdk-packages.log` and `avd.log` record the completed setup.
+
+For a live view, log into the Lubuntu desktop and open VMware's console (or separately configured remote desktop). SSH by itself does not display the emulator. The existing **Whisper Android 12 Emulator** application-menu entry runs `~/android-setup/start-emulator.sh`. From SSH, first check for an existing emulator so a second instance is not launched:
+
+```sh
+ssh andrew@comet 'source "$HOME/Android/Sdk/env.sh"; emulator -accel-check; adb devices -l'
+# Only if whisper-api31 is not already running:
+ssh andrew@comet 'nohup "$HOME/android-setup/start-emulator.sh" > "$HOME/android-setup/emulator.log" 2>&1 < /dev/null &'
+```
+
+The launcher resolves the active LXQt session's Xauthority and opens a visible window on `DISPLAY=:0`. Its emulator options include `-avd whisper-api31 -gpu software -memory 2048 -cores 2 -no-boot-anim -no-snapshot -camera-back none -camera-front none -no-metrics`. Do not replace the desktop with Xvfb or use `-no-window` when the user wants a live view. No network VNC service or remotely exposed ADB listener was configured. The initial ADB serial was `emulator-5554`; verify it each time.
+
+### Copy the intended working tree without GitHub
+
+Inspect `git status --short` on the phone and review the files to transfer. Include intended uncommitted/untracked source, but exclude ignored caches, `local.properties`, APKs and credentials. Do not copy `.git`, signing backups or the phone's Gradle cache. Use a fresh remote source directory for each run to avoid stale files from earlier snapshots; preserve existing remote work.
+
+From the phone's repository root, in Bash:
+
+```sh
+set -o pipefail
+COMET_RUN_DIR=$(ssh andrew@comet 'mkdir -p "$HOME/projects/whisper-to-input-runs"; mktemp -d "$HOME/projects/whisper-to-input-runs/run.XXXXXX"')
+test -n "$COMET_RUN_DIR"
+git ls-files -z --cached --others --exclude-standard |
+  tar --null -T - -czf - |
+  ssh andrew@comet "tar -xzf - -C '$COMET_RUN_DIR'"
+```
+
+Stop if copying fails. Record the local base commit, dirty status and file SHA-256 manifest outside the checkout, and verify the copied files against that manifest. A dirty snapshot is not identified by its base commit alone. The initial source copy does not automatically receive later phone edits. Do not commit/push just to use comet.
+
+### Build and capture on the selected emulator
+
+The following runs from the phone, using `COMET_RUN_DIR` from the copy step. Confirm `emulator-5554` is the intended disposable AVD first. Instrumentation resets app settings to dummy values and Gradle uninstalls the tested app at teardown; never target the user's physical phone or an emulator containing settings that must be preserved. This command installs test APKs, so use it within the user's authorized emulator testing scope.
+
+```sh
+ssh andrew@comet bash -s -- "$COMET_RUN_DIR" <<'REMOTE'
+set -euo pipefail
+source "$HOME/Android/Sdk/env.sh"
+export ANDROID_SERIAL=emulator-5554
+test "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = 1
+test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
+cd "$1/android"
+bash ./gradlew --no-daemon --max-workers=2 \
+  :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+adb shell wm size 1080x2280
+adb shell wm density 480
+adb shell settings put global window_animation_scale 0
+adb shell settings put global transition_animation_scale 0
+adb shell settings put global animator_duration_scale 0
+# This fixed export directory contains only the harness's dummy PNGs.
+adb shell rm -f '/sdcard/whisper-verification/*.png'
+bash ./gradlew --no-daemon --max-workers=2 \
+  '-Pandroid.testInstrumentationRunnerArguments.class=com.example.whispertoinput.ExampleInstrumentedTest#settingsAndKeyboardRenderLightAndDarkAtS10eWidth' \
+  :app:connectedDebugAndroidTest
+REMOTE
+```
+
+Stop on any failed build/test. Use Linux SDK binaries on comet: **no Termux AAPT2 override or phone-specific Kotlin compiler flags**. Use the checked-in wrapper and JDK 17; do not change build configuration for this host. The filtered command runs only the screenshot fixture, not the full instrumentation suite. To run the full suite, omit the runner-arguments property on a separate authorized run.
+
+After success, pull `/sdcard/whisper-verification` through ADB into a new host evidence directory outside the source tree. Retrieve that directory over SSH/rsync into a new `~/projects/whisper-to-input-verification/comet-<run-id>/` directory on the phone. Also retrieve:
+
+- `app/build/test-results/testDebugUnitTest/` and `app/build/reports/`;
+- `app/build/outputs/androidTest-results/` (parse its actual JUnit XML);
+- `app/build/outputs/apk/debug/app-debug.apk`, build/test logs, source identity and signature/hash reports.
+
+For example, on comet, with `COMET_VERIFY_DIR` set to a new absolute evidence directory and from the selected snapshot's `android/` directory:
+
+```sh
+: "${COMET_VERIFY_DIR:?Set a new directory outside the source tree}"
+set -euo pipefail
+source "$HOME/Android/Sdk/env.sh"
+mkdir -p "$COMET_VERIFY_DIR"
+adb -s emulator-5554 pull /sdcard/whisper-verification "$COMET_VERIFY_DIR/"
+java -jar "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" verify \
+  --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk > "$COMET_VERIFY_DIR/signature.txt"
+"$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging \
+  app/build/outputs/apk/debug/app-debug.apk > "$COMET_VERIFY_DIR/badging.txt"
+sha256sum app/build/outputs/apk/debug/app-debug.apk > "$COMET_VERIFY_DIR/SHA256SUMS"
+```
+
+Verify the downloaded APK against the host hash and inspect the manifest/signature. Comet's debug signing identity is distinct from both the distribution key and another host's debug key. Do not install this APK over the phone's release or transfer distribution signing keys to comet for screenshot tests. Visually inspect all ten PNGs in both themes; preserve the harness's export, `FLAG_SECURE`, and IME checks. These are dummy-data app-view captures, not full-device screenshots or live dictation evidence.
+
+After instrumentation teardown, reinstall the just-built debug APK **on the emulator** to restore the live app, then open its settings:
+
+```sh
+adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 shell am start -n \
+  com.jackthelobster.whispertoinput/com.example.whispertoinput.MainActivity
+adb -s emulator-5554 shell dumpsys activity activities |
+  grep -E 'mResumedActivity|topResumedActivity'
+```
+
+The reusable `~/android-setup/run-screenshots.sh` targets the **initial** `~/projects/whisper-to-input` copy and checks its original `build.log`; it does not select or synchronize a new snapshot. Prefer the explicit commands above for new changes rather than treating that helper or old logs as evidence of a fresh build.
+
+### Initial verified result (2026-10-15)
+
+The initial dirty source snapshot was based on `380a1a45fe0b01abb5b5bc0dba93cb34212679b6`. Its exact copied files, dirty status, reports and reviewed screenshots are recorded on this phone under `~/projects/whisper-to-input-verification/comet-20261015T222314Z-Dgp0bD/`, including `REPORT.md`, `source-SHA256SUMS` and `source-copy-check.txt`.
+
+The build above succeeded (77 tasks executed); all 80 unit tests passed with zero failures/errors/skips. Debug lint had zero errors and 104 warnings. The selected screenshot instrumentation test passed (one test, zero failures/errors/skips; two Gradle tasks executed and 62 up-to-date), producing ten reviewed PNGs. The debug APK verified with APK Signature Scheme v2 and SHA-256 `c8e855d4fd15eb62af80f73379fda73044419a8240268549001ed205c5ace448`. Its original host path is `~/projects/whisper-to-input/android/app/build/outputs/apk/debug/app-debug.apk`; a copy is in the phone's evidence directory. The app was reinstalled and its settings activity confirmed in the foreground of the visible emulator.
+
+This records that snapshot/artifact only. It does not certify later changes, the full instrumentation suite, release runtime behavior, physical-handset acceptance, or live microphone/transcription-server interaction. Report comet evidence with its snapshot identity and absolute image/report links; there is no GitHub run URL for this route.
 
 ## Local route: verified native Termux build
 
@@ -239,7 +351,7 @@ sha256sum app/build/outputs/apk/debug/app-debug.apk
 
 Review `app/build/reports/tests/testDebugUnitTest/`, `app/build/test-results/testDebugUnitTest/` and the lint report under `app/build/reports/`. Report actual task outcomes, not merely the existence of cached output files.
 
-Instrumentation requires an actual connected Android test device or a compatible emulator; building its APK is not running its tests. Use the Linux Android 12 emulator job in `.github/workflows/android.yml` when there is no usable device connection. Do not claim handset dictation, microphone or keyboard acceptance from Gradle assembly alone.
+Instrumentation requires an actual connected Android test device or a compatible emulator; building its APK is not running its tests. Use the Android 12 emulator on comet above, or the Linux emulator job in `.github/workflows/android.yml`, when there is no usable device connection on the phone. Do not claim handset dictation, microphone or keyboard acceptance from Gradle assembly alone.
 
 ## 5. Build a signed distribution release with the original key
 
