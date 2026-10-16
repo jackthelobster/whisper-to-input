@@ -1,10 +1,24 @@
 package com.example.whispertoinput
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EndpointPollScheduleTest {
+    @Test fun healthySelectionKeepsPollingDespiteOtherEndpointTimeout() {
+        val selected = AppSettings()
+        assertFalse(EndpointSelection(selected, ProbeResult.Timeout, ProbeResult.Ready).shouldPausePolling())
+        assertFalse(EndpointSelection(selected, ProbeResult.Ready, ProbeResult.Timeout).shouldPausePolling())
+    }
+
+    @Test fun onlyUnselectedTimeoutPausesPolling() {
+        assertTrue(EndpointSelection(null, ProbeResult.Timeout, ProbeResult.Unreachable).shouldPausePolling())
+        assertTrue(EndpointSelection(null, ProbeResult.Unreachable, ProbeResult.Timeout).shouldPausePolling())
+        assertFalse(EndpointSelection(null, ProbeResult.Unreachable).shouldPausePolling())
+        assertFalse(EndpointSelection(AppSettings(), ProbeResult.Ready).shouldPausePolling())
+    }
+
     @Test fun failuresBackOffAndSuccessResets() {
         val schedule = EndpointPollSchedule { 0.5 }
         assertEquals(9500L, schedule.nextDelayMillis(false))

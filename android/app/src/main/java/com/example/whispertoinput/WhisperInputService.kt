@@ -253,7 +253,7 @@ class WhisperInputService : InputMethodService() {
                 if (!isCurrentDictationTarget(session)) return@launch
                 session.settings = settings
                 session.selectedSettings = selected
-                session.endpointProbeTimedOut = result?.timedOut == true
+                session.endpointProbeTimedOut = result?.shouldPausePolling() == true
                 whisperKeyboard.setEndpointStatus(when {
                     selected == null -> R.string.endpoint_unavailable
                     selected.endpoint != settings.endpoint -> R.string.keyboard_ready_fallback
@@ -264,8 +264,8 @@ class WhisperInputService : InputMethodService() {
                     session.audio == null && !session.transcribing && recorderManager?.isRecording == false) {
                     whisperKeyboard.tryStartRecording()
                 }
-                // A timeout waits for an explicit refresh, settings change, or a new session.
-                if (result?.timedOut == true) return@launch
+                // Only a timeout with no usable endpoint waits for an explicit refresh.
+                if (session.endpointProbeTimedOut) return@launch
                 val interval = schedule.nextDelayMillis(selected != null)
                 delay((interval - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(1L))
             }

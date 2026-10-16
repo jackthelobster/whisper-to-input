@@ -17,3 +17,6 @@ internal class EndpointPollSchedule(private val random: () -> Double = { Random.
         return (base * (0.9 + random() * 0.1)).toLong()
     }
 }
+
+/** An optional endpoint timing out must not stop checks while dictation is available. */
+internal fun EndpointSelection.shouldPausePolling(): Boolean = selected == null && timedOut
