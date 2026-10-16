@@ -10,7 +10,7 @@ data class AppSettings(
     val autoSwitch: Boolean = false,
     val trailingSpace: Boolean = false,
     val showShiftEnter: Boolean = false,
-    val allowInsecure: Boolean = true,
+    val allowInsecure: Boolean = false,
     val fallbackEndpoint: String = "",
     val fallbackApiKey: String = "",
     val fallbackModel: String = model,

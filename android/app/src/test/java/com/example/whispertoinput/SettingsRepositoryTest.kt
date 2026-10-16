@@ -54,7 +54,7 @@ class SettingsRepositoryTest {
         val first = repository.load()
         credentials.failRead = true
         assertEquals(first, repository.load())
-        val updated = first.copy(model = "updated-model")
+        val updated = first.copy(model = "updated-model", allowInsecure = true)
         repository.save(updated)
         assertEquals(updated, repository.load())
         assertEquals(1L, repository.changes.value)
@@ -65,7 +65,7 @@ class SettingsRepositoryTest {
         val repository = SettingsRepository(MemoryStore(), credentials)
         val first = repository.load()
         credentials.failWrite = true
-        try { repository.save(first); fail("Save must fail") } catch (_: TranscriptionException) { }
+        try { repository.save(first.copy(allowInsecure = true)); fail("Save must fail") } catch (_: TranscriptionException) { }
         try { repository.load(); fail("Cache must be invalidated") } catch (_: TranscriptionException) { }
         assertEquals(1L, repository.changes.value)
     }
@@ -91,7 +91,7 @@ class SettingsRepositoryTest {
         assertEquals(AppSettings.DEFAULT_MODEL, settings.model)
         assertEquals("en", settings.language)
         assertEquals("", settings.apiKey)
-        assertTrue(settings.allowInsecure)
+        assertFalse(settings.allowInsecure)
         assertFalse(settings.autoRecord)
         assertFalse(settings.autoSwitch)
         assertFalse(settings.trailingSpace)
@@ -102,7 +102,7 @@ class SettingsRepositoryTest {
         val store = MemoryStore()
         val credentials = MemoryCredentials()
         val repository = SettingsRepository(store, credentials)
-        repository.save(AppSettings(showShiftEnter = true))
+        repository.save(AppSettings(showShiftEnter = true, allowInsecure = true))
         assertTrue(SettingsRepository(store, credentials).load().showShiftEnter)
         repository.save(repository.load().copy(showShiftEnter = false))
         assertFalse(SettingsRepository(store, credentials).load().showShiftEnter)
@@ -174,7 +174,7 @@ class SettingsRepositoryTest {
             fail("Expected migration failure")
         } catch (_: TranscriptionException) { }
         try {
-            repository.save(AppSettings())
+            repository.save(AppSettings(allowInsecure = true))
             fail("Expected recovery save failure")
         } catch (e: TranscriptionException) {
             assertFalse(e.message!!.contains("private"))
@@ -182,7 +182,7 @@ class SettingsRepositoryTest {
         assertRecoveryRequired(store, credentials)
         credentials.failWrite = false
         assertRecoveryRequired(store, credentials)
-        repository.save(AppSettings())
+        repository.save(AppSettings(allowInsecure = true))
         assertNull(store.state.value[CREDENTIAL_RECOVERY_REQUIRED])
         assertEquals("", repository.load().apiKey)
     }
@@ -191,7 +191,7 @@ class SettingsRepositoryTest {
         val store = MemoryStore(preferencesOf(API_KEY to "stale-token"))
         val credentials = MemoryCredentials("previous-token").apply { failWrite = true }
         try {
-            SettingsRepository(store, credentials).save(AppSettings())
+            SettingsRepository(store, credentials).save(AppSettings(allowInsecure = true))
             fail("Expected credential save failure")
         } catch (_: TranscriptionException) { }
         assertEquals("previous-token", credentials.value)
@@ -272,7 +272,7 @@ class SettingsRepositoryTest {
     @Test fun explicitRecoveryCanClearAnUnreadableCredential() = runBlocking {
         val credentials = MemoryCredentials("damaged-key").apply { failRead = true }
         val repository = SettingsRepository(MemoryStore(), credentials)
-        repository.save(AppSettings())
+        repository.save(AppSettings(allowInsecure = true))
         credentials.failRead = false
         assertEquals("", repository.load().apiKey)
     }
@@ -323,7 +323,7 @@ class SettingsRepositoryTest {
         } catch (_: TranscriptionException) { }
         fallback.failWrite = true
         try {
-            SettingsRepository(store, main, fallback).save(AppSettings())
+            SettingsRepository(store, main, fallback).save(AppSettings(allowInsecure = true))
             fail("Failed credential persistence must require recovery")
         } catch (_: TranscriptionException) { }
         assertRecoveryRequired(store, main)

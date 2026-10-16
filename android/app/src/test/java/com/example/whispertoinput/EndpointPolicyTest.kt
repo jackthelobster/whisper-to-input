@@ -6,8 +6,13 @@ import org.junit.Test
 class EndpointPolicyTest {
     @Test fun acceptsCustomHttpsAndDefaultHttpHost() {
         assertTrue(EndpointPolicy.validate("https://example.test:8443/custom/transcribe", false).isHttps)
-        assertEquals("gx10", EndpointPolicy.validate(AppSettings()).host)
+        assertEquals("gx10", EndpointPolicy.validate(AppSettings(allowInsecure = true)).host)
         assertEquals("gx10", EndpointPolicy.validate("http://gx10:8020/custom", true).host)
+    }
+
+    @Test fun freshInstallRequiresExplicitHttpOptIn() {
+        assertFalse(AppSettings().allowInsecure)
+        assertThrows(TranscriptionException::class.java) { EndpointPolicy.validate(AppSettings()) }
     }
 
     @Test fun httpOnAnyHostRequiresToggleAndRejectsKeys() {

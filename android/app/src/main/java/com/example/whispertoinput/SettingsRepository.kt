@@ -85,7 +85,7 @@ class SettingsRepository internal constructor(
                     autoSwitch = preferences[AUTO_SWITCH_BACK] ?: false,
                     trailingSpace = preferences[ADD_TRAILING_SPACE] ?: false,
                     showShiftEnter = preferences[SHOW_SHIFT_ENTER] ?: false,
-                    allowInsecure = preferences[ALLOW_INSECURE] ?: true
+                    allowInsecure = preferences[ALLOW_INSECURE] ?: false
                 ).also { cached = it }
             } catch (e: CancellationException) {
                 throw e

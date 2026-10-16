@@ -151,7 +151,7 @@ class EndpointAvailabilityTest {
             override fun lookup(hostname: String) = listOf(InetAddress.getByName("127.0.0.1"))
         }).proxy(Proxy.NO_PROXY).build().also { clients += it }
     private fun settings(server: MockWebServer) = AppSettings(endpoint = server.url("/prefix/v1/audio/transcriptions")
-        .newBuilder().host("gx10").build().toString())
+        .newBuilder().host("gx10").build().toString(), allowInsecure = true)
     private fun models() = MockResponse().setBody("{\"data\":[{\"id\":\"${AppSettings.DEFAULT_MODEL}\"}]}")
 
     @Test fun probeUsesModelsWithoutAudioAndPreservesPathPrefix() = runBlocking {
