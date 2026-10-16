@@ -179,6 +179,51 @@ class EndpointAvailabilityTest {
         }
     }
 
+    @Test fun optionalDiscoveryDoesNotBlockDictation() = runBlocking {
+        val server = server()
+        val probe = EndpointProbe(client())
+        for (response in listOf(
+            MockResponse().setResponseCode(404), MockResponse().setResponseCode(405),
+            MockResponse().setBody("{}"), MockResponse().setBody("invalid json"),
+            MockResponse().setBody("""{"data":[{"id":"alias"}]}"""),
+            MockResponse().setBody("""{"padding":"${"x".repeat(70 * 1024)}","data":[{"id":"${AppSettings.DEFAULT_MODEL}"}]}""")
+        )) {
+            server.enqueue(response)
+            val result = probe.check(settings(server))
+            assertNotEquals(ProbeResult.Ready, result)
+            assertTrue(result.permitsTranscription)
+            val selection = EndpointAvailability { result }.inspect(settings(server))
+            assertEquals(settings(server), selection.selected)
+            assertEquals(result, selection.selectedProbe)
+            assertFalse(selection.shouldPausePolling())
+        }
+    }
+
+    @Test fun selectionPrefersVerifiedThenUnverifiedEndpoints() = runBlocking {
+        for (result in listOf(ProbeResult.HttpError(404), ProbeResult.HttpError(405),
+            ProbeResult.InvalidResponse, ProbeResult.ModelMissing("alias"))) {
+            for (fallback in listOf(ProbeResult.Ready, ProbeResult.Timeout, result)) {
+                val selection = EndpointAvailability {
+                    if (it.endpoint == settings.endpoint) result else fallback
+                }.inspect(settings)
+                assertEquals(if (fallback == ProbeResult.Ready) settings.fallbackEndpoint else settings.endpoint,
+                    selection.selected?.endpoint)
+                assertEquals(if (fallback == ProbeResult.Ready) fallback else result, selection.selectedProbe)
+            }
+            val selection = EndpointAvailability {
+                if (it.endpoint == settings.endpoint) ProbeResult.Unreachable else result
+            }.inspect(settings)
+            assertEquals(settings.fallbackEndpoint, selection.selected?.endpoint)
+            assertEquals(settings.fallbackApiKey, selection.selected?.apiKey)
+        }
+        for (failure in listOf(ProbeResult.HttpError(401), ProbeResult.HttpError(403),
+            ProbeResult.HttpError(302), ProbeResult.HttpError(503), ProbeResult.InvalidEndpoint,
+            ProbeResult.Unreachable, ProbeResult.Timeout)) {
+            assertFalse(failure.permitsTranscription)
+            assertNull(EndpointAvailability { failure }.select(settings))
+        }
+    }
+
     @Test fun probeReportsHttpModelAndProtocolFailuresSeparately() = runBlocking {
         val server = server()
         val probe = EndpointProbe(client())

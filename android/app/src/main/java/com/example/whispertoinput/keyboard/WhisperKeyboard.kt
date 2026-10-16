@@ -239,6 +239,8 @@ class WhisperKeyboard {
             errorMessage != null -> errorMessage
             endpointStatus == R.string.endpoint_unavailable -> endpointDetail
                 ?: context.getString(R.string.endpoint_unavailable_hint)
+            endpointStatus == R.string.endpoint_unverified || endpointStatus == R.string.endpoint_unverified_fallback ->
+                context.getString(R.string.endpoint_unverified_hint)
             endpointStatus == R.string.testing_connection -> context.getString(R.string.testing_connection)
             else -> context.getString(R.string.keyboard_ready_hint)
         }

@@ -256,6 +256,8 @@ class WhisperInputService : InputMethodService() {
                 session.endpointProbeTimedOut = result?.shouldPausePolling() == true
                 whisperKeyboard.setEndpointStatus(when {
                     selected == null -> R.string.endpoint_unavailable
+                    selected.endpoint == settings.endpoint && result.selectedProbe != ProbeResult.Ready -> R.string.endpoint_unverified
+                    selected.endpoint != settings.endpoint && result.selectedProbe != ProbeResult.Ready -> R.string.endpoint_unverified_fallback
                     selected.endpoint != settings.endpoint -> R.string.keyboard_ready_fallback
                     else -> R.string.keyboard_ready
                 }, result?.statusText(this@WhisperInputService) ?: getString(R.string.settings_load_failed))

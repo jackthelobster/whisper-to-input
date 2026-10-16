@@ -133,6 +133,9 @@
     <string name="retry">Retry</string>
     <string name="keyboard_ready">Ready.</string>
     <string name="keyboard_ready_fallback">Ready. Using the fallback endpoint.</string>
+    <string name="endpoint_unverified">Model unverified. Dictation available.</string>
+    <string name="endpoint_unverified_fallback">Fallback model unverified. Dictation available.</string>
+    <string name="endpoint_unverified_hint">Model discovery could not verify this model. Tap the microphone to try transcription.</string>
     <string name="endpoint_unreachable">Cannot reach the server.</string>
     <string name="endpoint_http_error">Server returned HTTP %1$d.</string>
     <string name="endpoint_model_missing">Connected, but model “%1$s” is not on the server.</string>

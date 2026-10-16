@@ -23,6 +23,11 @@ internal sealed class ProbeResult {
     data class ModelMissing(val model: String) : ProbeResult()
     object InvalidResponse : ProbeResult()
     object InvalidEndpoint : ProbeResult()
+
+    /** Model discovery is optional; only these diagnostic failures permit an upload attempt. */
+    val permitsTranscription: Boolean
+        get() = this == Ready || this is ModelMissing || this == InvalidResponse ||
+            (this is HttpError && code in setOf(404, 405))
 }
 
 internal data class EndpointSelection(
@@ -30,6 +35,15 @@ internal data class EndpointSelection(
     val primary: ProbeResult,
     val fallback: ProbeResult? = null
 ) {
+    val selectedProbe: ProbeResult?
+        get() = when {
+            selected == null -> null
+            primary == ProbeResult.Ready -> primary
+            fallback == ProbeResult.Ready -> fallback
+            primary.permitsTranscription -> primary
+            else -> fallback
+        }
+
     val timedOut: Boolean
         get() = primary == ProbeResult.Timeout || fallback == ProbeResult.Timeout
 }
@@ -59,6 +73,8 @@ internal class EndpointAvailability(
         EndpointSelection(when {
             primaryResult == ProbeResult.Ready -> settings
             fallbackResult == ProbeResult.Ready -> fallbackSettings
+            primaryResult.permitsTranscription -> settings
+            fallbackResult?.permitsTranscription == true -> fallbackSettings
             else -> null
         }, primaryResult, fallbackResult)
     }
