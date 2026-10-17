@@ -10,11 +10,15 @@ import org.junit.rules.TemporaryFolder
 class TranscriptionProtocolTest {
     @get:Rule val temporary = TemporaryFolder()
 
-    private fun request(settings: AppSettings = AppSettings()) = TranscriptionProtocol.buildRequest(
+    private fun request(settings: AppSettings = AppSettings(allowInsecure = true)) = TranscriptionProtocol.buildRequest(
         settings, temporary.newFile().apply { writeBytes(byteArrayOf(1, 2, 3)) }, "audio/mp4"
     )
 
-    @Test fun approvedDefaultIsKeylessAndMultipartHasBoundary() {
+    @Test fun defaultSettingsCannotUploadWithoutHttpOptIn() {
+        assertThrows(TranscriptionException::class.java) { request(AppSettings()) }
+    }
+
+    @Test fun optedInLocalEndpointIsKeylessAndMultipartHasBoundary() {
         val request = request()
         assertEquals(AppSettings.DEFAULT_ENDPOINT, request.url.toString())
         assertNull(request.header("Authorization"))
@@ -48,7 +52,7 @@ class TranscriptionProtocolTest {
 
     @Test fun blankLanguageOmitsLanguageForAutomaticDetection() {
         val buffer = Buffer()
-        request(AppSettings(language = "")).body!!.writeTo(buffer)
+        request(AppSettings(language = "", allowInsecure = true)).body!!.writeTo(buffer)
         assertFalse(buffer.readUtf8().contains("name=\"language\""))
     }
 
@@ -73,12 +77,24 @@ class TranscriptionProtocolTest {
     @Test fun invalidRecordingAndModelAreRejectedBeforeNetworking() {
         val empty = temporary.newFile()
         assertThrows(TranscriptionException::class.java) {
-            TranscriptionProtocol.buildRequest(AppSettings(), empty, "audio/mp4")
+            TranscriptionProtocol.buildRequest(AppSettings(allowInsecure = true), empty, "audio/mp4")
         }
         assertThrows(TranscriptionException::class.java) { request(AppSettings(model = "")) }
         assertThrows(TranscriptionException::class.java) {
-            TranscriptionProtocol.buildRequest(AppSettings(), empty.apply { writeText("audio") }, "text/plain")
+            TranscriptionProtocol.buildRequest(AppSettings(allowInsecure = true), empty.apply { writeText("audio") }, "text/plain")
         }
+    }
+
+    @Test fun invalidFallbackModelAndLanguageAreRejected() {
+        val settings = AppSettings(allowInsecure = true, fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions")
+        assertThrows(TranscriptionException::class.java) {
+            TranscriptionProtocol.validateSettings(settings.copy(fallbackModel = ""))
+        }
+        assertThrows(TranscriptionException::class.java) {
+            TranscriptionProtocol.validateSettings(settings.copy(fallbackLanguage = "fr\n"))
+        }
+        // Unused fallback fields do not prevent saving main-server settings.
+        TranscriptionProtocol.validateSettings(settings.copy(fallbackEndpoint = "", fallbackModel = ""))
     }
 
     @Test fun settingsToStringRedactsBothKeyAndEndpoint() {

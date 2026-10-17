@@ -19,10 +19,10 @@ internal interface CredentialStore {
 }
 
 /** No exportable key material, plaintext preferences, trust-all TLS, or logging. */
-internal class KeystoreCredentialStore(context: Context) : CredentialStore {
-    private val preferences = context.getSharedPreferences("encrypted_credentials", Context.MODE_PRIVATE)
-    private val alias = "${context.packageName}.transcription.credentials.v1"
-    private val aad = "${context.packageName}.transcription.api-key.v1".toByteArray(Charsets.UTF_8)
+internal class KeystoreCredentialStore(context: Context, slot: String = "") : CredentialStore {
+    private val preferences = context.getSharedPreferences("encrypted_credentials$slot", Context.MODE_PRIVATE)
+    private val alias = "${context.packageName}.transcription.credentials.v1$slot"
+    private val aad = "${context.packageName}.transcription.api-key.v1$slot".toByteArray(Charsets.UTF_8)
 
     override fun contains(): Boolean = preferences.contains(ENTRY)
 

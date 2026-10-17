@@ -32,8 +32,8 @@ object EndpointPolicy {
             throw TranscriptionException("The API key contains unsupported characters.")
         }
         if (!url.isHttps) {
-            if (!allowInsecure || url.host != "gx10") {
-                throw TranscriptionException("HTTPS is required except for the explicitly enabled gx10 host.")
+            if (!allowInsecure) {
+                throw TranscriptionException("HTTPS is required unless Allow unsecure HTTP is enabled.")
             }
             if (apiKey.isNotEmpty()) {
                 throw TranscriptionException("API keys cannot be sent over HTTP. Use HTTPS or remove the key.")

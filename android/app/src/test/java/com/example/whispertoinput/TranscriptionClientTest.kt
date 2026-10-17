@@ -45,7 +45,7 @@ class TranscriptionClientTest {
         .proxy(Proxy.NO_PROXY).build().also { networkClients += it }
 
     private fun settings() = AppSettings(endpoint = server.url("/v1/audio/transcriptions?tenant=test")
-        .newBuilder().host("gx10").build().toString())
+        .newBuilder().host("gx10").build().toString(), allowInsecure = true)
     private fun audio() = temporary.newFile().apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
 
     @Test fun wireRequestHasCorrectMultipartBoundaryAndNoAccidentalQuery() = runBlocking {

@@ -19,6 +19,8 @@
 
 package com.example.whispertoinput.keyboard
 
+import android.content.res.ColorStateList
+import androidx.core.content.ContextCompat
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
@@ -29,9 +31,25 @@ import kotlin.math.log10
 
 /** View-only dictation controller; audio and retry-file ownership remain in the input service. */
 class WhisperKeyboard {
+    enum class EndpointStatus {
+        Checking, Unavailable, Ready, ReadyFallback, Unverified, UnverifiedFallback;
+
+        val labelRes: Int
+            get() = when (this) {
+                Checking -> R.string.testing_connection
+                Unavailable -> R.string.endpoint_unavailable
+                Ready -> R.string.keyboard_ready
+                ReadyFallback -> R.string.keyboard_ready_fallback
+                Unverified -> R.string.endpoint_unverified
+                UnverifiedFallback -> R.string.endpoint_unverified_fallback
+            }
+    }
+
     private enum class KeyboardStatus { Idle, Recording, Transcribing }
     private var keyboardStatus = KeyboardStatus.Idle
     private var sensitiveInput = false
+    private var endpointDetail: String? = null
+    private var endpointStatus = EndpointStatus.Checking
     private var errorMessage: String? = null
     private var onStartRecording: () -> Unit = {}
     private var onCancelRecording: () -> Unit = {}
@@ -41,6 +59,8 @@ class WhisperKeyboard {
     private var keyboardView: View? = null
     private var buttonMic: ImageButton? = null
     private var buttonEnter: ImageButton? = null
+    private var buttonShiftEnter: View? = null
+    private var onRefreshEndpoints: () -> Unit = {}
     private var buttonCancel: ImageButton? = null
     private var buttonRetry: ImageButton? = null
     private var buttonSpaceBar: ImageButton? = null
@@ -50,10 +70,8 @@ class WhisperKeyboard {
     private var waitingIcon: ProgressBar? = null
     private var amplitudeRing: View? = null
 
-    // Keep the existing service's positional and named argument contract intact.
     fun setup(
         layoutInflater: LayoutInflater,
-        shouldOfferImeSwitch: Boolean,
         onStartRecording: () -> Unit,
         onCancelRecording: () -> Unit,
         onStartTranscribing: (attachToEnd: String) -> Unit,
@@ -64,6 +82,8 @@ class WhisperKeyboard {
         onSwitchIme: () -> Unit,
         onOpenSettings: () -> Unit,
         shouldShowRetry: () -> Boolean,
+        onShiftEnter: () -> Unit = {},
+        onRefreshEndpoints: () -> Unit = {},
     ): View {
         buttonBackspace?.stopRepeating()
         this.onStartRecording = onStartRecording
@@ -71,10 +91,15 @@ class WhisperKeyboard {
         this.onStartTranscribing = onStartTranscribing
         this.onCancelTranscribing = onCancelTranscribing
         this.shouldShowRetry = shouldShowRetry
+        this.onRefreshEndpoints = onRefreshEndpoints
         val view = layoutInflater.inflate(R.layout.keyboard_view, null)
         keyboardView = view
         buttonMic = view.findViewById(R.id.btn_mic)
         buttonEnter = view.findViewById(R.id.btn_enter)
+        buttonShiftEnter = view.findViewById(R.id.btn_shift_enter)
+        buttonShiftEnter?.setOnClickListener {
+            if (keyboardStatus == KeyboardStatus.Idle) onShiftEnter()
+        }
         buttonCancel = view.findViewById(R.id.btn_cancel)
         buttonRetry = view.findViewById(R.id.btn_retry)
         buttonSpaceBar = view.findViewById(R.id.btn_space_bar)
@@ -85,7 +110,7 @@ class WhisperKeyboard {
         amplitudeRing = view.findViewById(R.id.mic_amplitude_ring)
         buttonMic?.setOnClickListener {
             when (keyboardStatus) {
-                KeyboardStatus.Idle -> tryStartRecording()
+                KeyboardStatus.Idle -> if (endpointStatus == EndpointStatus.Unavailable) this.onRefreshEndpoints() else tryStartRecording()
                 KeyboardStatus.Recording -> tryStartTranscribing("")
                 KeyboardStatus.Transcribing -> Unit
             }
@@ -113,7 +138,8 @@ class WhisperKeyboard {
             onOpenSettings()
         }
         view.findViewById<ImageButton>(R.id.btn_previous_ime).apply {
-            visibility = if (shouldOfferImeSwitch) View.VISIBLE else View.GONE
+            // Returning from voice input is always available. The service opens the picker
+            // if Android has no previous keyboard; the next-IME hint does not apply here.
             setOnClickListener {
                 buttonBackspace?.stopRepeating()
                 onSwitchIme()
@@ -149,6 +175,16 @@ class WhisperKeyboard {
         setKeyboardStatus(KeyboardStatus.Idle)
     }
 
+    fun setShowShiftEnter(show: Boolean) {
+        buttonShiftEnter?.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    fun setEndpointStatus(status: EndpointStatus, detail: String? = null) {
+        endpointStatus = status
+        endpointDetail = detail
+        render()
+    }
+
     fun updateMicrophoneAmplitude(amplitude: Int) {
         if (keyboardStatus != KeyboardStatus.Recording || sensitiveInput) return
         val level = ((log10(amplitude.coerceIn(10, 25000).toFloat()) - 1f) / 3.398f).coerceIn(0f, 1f)
@@ -162,7 +198,8 @@ class WhisperKeyboard {
     }
 
     fun tryStartRecording() {
-        if (keyboardView == null || sensitiveInput || keyboardStatus != KeyboardStatus.Idle) return
+        if (keyboardView == null || sensitiveInput || keyboardStatus != KeyboardStatus.Idle ||
+            endpointStatus == EndpointStatus.Unavailable || endpointStatus == EndpointStatus.Checking) return
         errorMessage = null
         setKeyboardStatus(KeyboardStatus.Recording)
         onStartRecording()
@@ -207,24 +244,42 @@ class WhisperKeyboard {
             recording -> R.string.recording
             transcribing -> R.string.transcribing
             errorMessage != null -> R.string.keyboard_error
-            else -> R.string.keyboard_ready
+            else -> endpointStatus.labelRes
         }
         val hint = when {
             sensitiveInput -> context.getString(R.string.keyboard_sensitive_hint)
             recording -> context.getString(R.string.keyboard_recording_hint)
             transcribing -> context.getString(R.string.keyboard_transcribing_hint)
             errorMessage != null -> errorMessage
+            endpointStatus == EndpointStatus.Unavailable -> endpointDetail
+                ?: context.getString(R.string.endpoint_unavailable_hint)
+            endpointStatus == EndpointStatus.Unverified || endpointStatus == EndpointStatus.UnverifiedFallback ->
+                context.getString(R.string.endpoint_unverified_hint)
+            endpointStatus == EndpointStatus.Checking -> context.getString(R.string.testing_connection)
             else -> context.getString(R.string.keyboard_ready_hint)
         }
         labelStatus?.setText(status)
         labelHint?.text = hint
+        val unavailable = !active && endpointStatus == EndpointStatus.Unavailable
+        val checking = !active && endpointStatus == EndpointStatus.Checking
+        buttonShiftEnter?.apply {
+            isEnabled = !active
+            alpha = if (active) 0.38f else 1f
+        }
         buttonMic?.apply {
-            isEnabled = !sensitiveInput && !transcribing
+            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context,
+                if (unavailable || checking) R.color.endpoint_refresh_background else R.color.app_primary))
+            isEnabled = !sensitiveInput && !transcribing && !checking
             alpha = if (sensitiveInput) 0.38f else 1f
-            setImageResource(if (recording) R.drawable.ic_dictation_stop else R.drawable.ic_dictation_mic)
+            setImageResource(when {
+                recording -> R.drawable.ic_dictation_stop
+                unavailable || checking -> R.drawable.ic_dictation_retry
+                else -> R.drawable.ic_dictation_mic
+            })
             imageAlpha = if (transcribing) 0 else 255
             contentDescription = context.getString(when {
                 sensitiveInput -> R.string.keyboard_sensitive
+                unavailable || checking -> R.string.refresh_endpoints
                 recording -> R.string.stop_speech_to_text
                 transcribing -> R.string.transcribing
                 else -> R.string.start_speech_to_text
