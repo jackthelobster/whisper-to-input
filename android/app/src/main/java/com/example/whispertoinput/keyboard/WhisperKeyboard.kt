@@ -180,8 +180,10 @@ class WhisperKeyboard {
     }
 
     fun setEndpointStatus(status: EndpointStatus, detail: String? = null) {
+        val visibleDetail = detail.takeIf { status == EndpointStatus.Unavailable }
+        if (endpointStatus == status && endpointDetail == visibleDetail) return
         endpointStatus = status
-        endpointDetail = detail
+        endpointDetail = visibleDetail
         render()
     }
 

@@ -239,7 +239,8 @@ class WhisperInputService : InputMethodService() {
     private fun startAvailabilityChecks(session: EditorSession, checkBoth: Boolean = false) {
         settingsJob?.cancel()
         session.endpointProbeTimedOut = false
-        whisperKeyboard.setEndpointStatus(EndpointStatus.Checking)
+        // Rechecks run quietly; retain the last result until availability changes.
+        // New sessions already show Checking in beginSessionIfReady().
         settingsJob = serviceScope.launch {
             val schedule = EndpointPollSchedule()
             var checkAll = checkBoth
