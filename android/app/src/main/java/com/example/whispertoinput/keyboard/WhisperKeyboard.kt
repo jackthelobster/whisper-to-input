@@ -31,11 +31,25 @@ import kotlin.math.log10
 
 /** View-only dictation controller; audio and retry-file ownership remain in the input service. */
 class WhisperKeyboard {
+    enum class EndpointStatus {
+        Checking, Unavailable, Ready, ReadyFallback, Unverified, UnverifiedFallback;
+
+        val labelRes: Int
+            get() = when (this) {
+                Checking -> R.string.testing_connection
+                Unavailable -> R.string.endpoint_unavailable
+                Ready -> R.string.keyboard_ready
+                ReadyFallback -> R.string.keyboard_ready_fallback
+                Unverified -> R.string.endpoint_unverified
+                UnverifiedFallback -> R.string.endpoint_unverified_fallback
+            }
+    }
+
     private enum class KeyboardStatus { Idle, Recording, Transcribing }
     private var keyboardStatus = KeyboardStatus.Idle
     private var sensitiveInput = false
     private var endpointDetail: String? = null
-    private var endpointStatus = R.string.testing_connection
+    private var endpointStatus = EndpointStatus.Checking
     private var errorMessage: String? = null
     private var onStartRecording: () -> Unit = {}
     private var onCancelRecording: () -> Unit = {}
@@ -96,7 +110,7 @@ class WhisperKeyboard {
         amplitudeRing = view.findViewById(R.id.mic_amplitude_ring)
         buttonMic?.setOnClickListener {
             when (keyboardStatus) {
-                KeyboardStatus.Idle -> if (endpointStatus == R.string.endpoint_unavailable) this.onRefreshEndpoints() else tryStartRecording()
+                KeyboardStatus.Idle -> if (endpointStatus == EndpointStatus.Unavailable) this.onRefreshEndpoints() else tryStartRecording()
                 KeyboardStatus.Recording -> tryStartTranscribing("")
                 KeyboardStatus.Transcribing -> Unit
             }
@@ -165,7 +179,7 @@ class WhisperKeyboard {
         buttonShiftEnter?.visibility = if (show) View.VISIBLE else View.GONE
     }
 
-    fun setEndpointStatus(status: Int, detail: String? = null) {
+    fun setEndpointStatus(status: EndpointStatus, detail: String? = null) {
         endpointStatus = status
         endpointDetail = detail
         render()
@@ -185,7 +199,7 @@ class WhisperKeyboard {
 
     fun tryStartRecording() {
         if (keyboardView == null || sensitiveInput || keyboardStatus != KeyboardStatus.Idle ||
-            endpointStatus == R.string.endpoint_unavailable || endpointStatus == R.string.testing_connection) return
+            endpointStatus == EndpointStatus.Unavailable || endpointStatus == EndpointStatus.Checking) return
         errorMessage = null
         setKeyboardStatus(KeyboardStatus.Recording)
         onStartRecording()
@@ -230,24 +244,24 @@ class WhisperKeyboard {
             recording -> R.string.recording
             transcribing -> R.string.transcribing
             errorMessage != null -> R.string.keyboard_error
-            else -> endpointStatus
+            else -> endpointStatus.labelRes
         }
         val hint = when {
             sensitiveInput -> context.getString(R.string.keyboard_sensitive_hint)
             recording -> context.getString(R.string.keyboard_recording_hint)
             transcribing -> context.getString(R.string.keyboard_transcribing_hint)
             errorMessage != null -> errorMessage
-            endpointStatus == R.string.endpoint_unavailable -> endpointDetail
+            endpointStatus == EndpointStatus.Unavailable -> endpointDetail
                 ?: context.getString(R.string.endpoint_unavailable_hint)
-            endpointStatus == R.string.endpoint_unverified || endpointStatus == R.string.endpoint_unverified_fallback ->
+            endpointStatus == EndpointStatus.Unverified || endpointStatus == EndpointStatus.UnverifiedFallback ->
                 context.getString(R.string.endpoint_unverified_hint)
-            endpointStatus == R.string.testing_connection -> context.getString(R.string.testing_connection)
+            endpointStatus == EndpointStatus.Checking -> context.getString(R.string.testing_connection)
             else -> context.getString(R.string.keyboard_ready_hint)
         }
         labelStatus?.setText(status)
         labelHint?.text = hint
-        val unavailable = !active && endpointStatus == R.string.endpoint_unavailable
-        val checking = !active && endpointStatus == R.string.testing_connection
+        val unavailable = !active && endpointStatus == EndpointStatus.Unavailable
+        val checking = !active && endpointStatus == EndpointStatus.Checking
         buttonShiftEnter?.apply {
             isEnabled = !active
             alpha = if (active) 0.38f else 1f

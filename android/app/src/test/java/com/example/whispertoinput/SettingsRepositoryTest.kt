@@ -2,6 +2,7 @@ package com.example.whispertoinput
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.preferencesOf
 import kotlinx.coroutines.flow.Flow
@@ -83,6 +84,28 @@ class SettingsRepositoryTest {
                 assertFalse(e.message!!.contains("private"))
             }
         }
+    }
+
+    @Test fun legacyHttpOptInMigratesAndSurvivesReload() = runBlocking {
+        val legacy = booleanPreferencesKey("allow-insecure-gx10")
+        for (allowed in listOf(true, false)) {
+            val store = MemoryStore(preferencesOf(legacy to allowed))
+            val credentials = MemoryCredentials()
+            assertEquals(allowed, SettingsRepository(store, credentials).load().allowInsecure)
+            assertNull(store.state.value[legacy])
+            assertEquals(allowed, store.state.value[ALLOW_INSECURE])
+            assertEquals(allowed, SettingsRepository(store, credentials).load().allowInsecure)
+        }
+    }
+
+    @Test fun explicitHttpPreferenceWinsOverLegacyValue() = runBlocking {
+        val legacy = booleanPreferencesKey("allow-insecure-gx10")
+        val store = MemoryStore(preferencesOf(legacy to true, ALLOW_INSECURE to false))
+        val repository = SettingsRepository(store, MemoryCredentials())
+        assertFalse(repository.load().allowInsecure)
+        assertNull(store.state.value[legacy])
+        repository.save(repository.load().copy(allowInsecure = true))
+        assertTrue(SettingsRepository(store, MemoryCredentials()).load().allowInsecure)
     }
 
     @Test fun defaultsMatchApprovedEndpointAndSafeUiFlags() = runBlocking {

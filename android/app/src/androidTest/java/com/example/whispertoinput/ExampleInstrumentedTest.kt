@@ -13,6 +13,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.whispertoinput.keyboard.WhisperKeyboard
+import com.example.whispertoinput.keyboard.WhisperKeyboard.EndpointStatus
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -62,7 +63,7 @@ class ExampleInstrumentedTest {
                 keyboard.setSensitiveInput(true)
                 pressBack() // Password/private field.
                 keyboard.setSensitiveInput(false)
-                keyboard.setEndpointStatus(R.string.keyboard_ready)
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
                 keyboard.tryStartRecording()
                 pressBack() // Listening.
                 keyboard.tryStartTranscribing("")
@@ -106,15 +107,24 @@ class ExampleInstrumentedTest {
                 measure()
                 assertEquals(fullWidth, space.width)
                 val mic = view.findViewById<View>(R.id.btn_mic)
-                keyboard.setEndpointStatus(R.string.endpoint_unavailable)
+                keyboard.setEndpointStatus(EndpointStatus.Unavailable)
                 mic.performClick()
                 assertEquals(1, refreshes)
                 assertEquals(0, recordings)
                 assertEquals(activity.getString(R.string.refresh_endpoints), mic.contentDescription)
-                keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
-                mic.performClick()
-                assertEquals(1, recordings)
-                keyboard.reset()
+                keyboard.setEndpointStatus(EndpointStatus.Checking)
+                keyboard.tryStartRecording()
+                assertEquals(0, recordings)
+                assertFalse(mic.isEnabled)
+                for (endpoint in listOf(EndpointStatus.Ready, EndpointStatus.ReadyFallback,
+                    EndpointStatus.Unverified, EndpointStatus.UnverifiedFallback)) {
+                    keyboard.setEndpointStatus(endpoint)
+                    assertTrue(mic.isEnabled)
+                    val before = recordings
+                    mic.performClick()
+                    assertEquals(before + 1, recordings)
+                    keyboard.reset()
+                }
             }
         }
     }
@@ -126,7 +136,7 @@ class ExampleInstrumentedTest {
                 val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {}, {}, {}, { false })
                 val status = view.findViewById<android.widget.TextView>(R.id.label_status)
                 assertEquals(activity.getString(R.string.testing_connection), status.text.toString())
-                keyboard.setEndpointStatus(R.string.endpoint_unavailable)
+                keyboard.setEndpointStatus(EndpointStatus.Unavailable)
                 assertEquals(activity.getString(R.string.endpoint_unavailable), status.text.toString())
                 val hint = view.findViewById<android.widget.TextView>(R.id.label_hint)
                 fun measureHeight(): Int {
@@ -135,23 +145,23 @@ class ExampleInstrumentedTest {
                     view.layout(0, 0, view.measuredWidth, view.measuredHeight)
                     return view.measuredHeight
                 }
-                keyboard.setEndpointStatus(R.string.keyboard_ready)
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
                 val readyHeight = measureHeight()
                 val timeout = activity.getString(R.string.endpoint_probe_timeout)
-                keyboard.setEndpointStatus(R.string.endpoint_unavailable, timeout)
+                keyboard.setEndpointStatus(EndpointStatus.Unavailable, timeout)
                 assertEquals("Endpoint(s) unavailable", status.text.toString())
                 assertEquals("Endpoint probe timeout", hint.text.toString())
                 assertEquals(readyHeight, measureHeight())
-                keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
+                keyboard.setEndpointStatus(EndpointStatus.ReadyFallback)
                 assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
-                keyboard.setEndpointStatus(R.string.keyboard_ready)
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
                 keyboard.tryStartRecording()
-                keyboard.setEndpointStatus(R.string.keyboard_ready)
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
                 assertEquals(activity.getString(R.string.recording), status.text.toString())
                 keyboard.reset()
                 assertEquals(activity.getString(R.string.keyboard_ready), status.text.toString())
                 keyboard.showError("Retry your recording")
-                keyboard.setEndpointStatus(R.string.keyboard_ready_fallback)
+                keyboard.setEndpointStatus(EndpointStatus.ReadyFallback)
                 assertEquals(activity.getString(R.string.keyboard_error), status.text.toString())
                 keyboard.reset()
                 assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
@@ -222,7 +232,7 @@ class ExampleInstrumentedTest {
                     keyboard.setSensitiveInput(true)
                     assertFalse(view.findViewById<View>(R.id.btn_mic).isEnabled)
                     keyboard.setSensitiveInput(false)
-                    keyboard.setEndpointStatus(R.string.keyboard_ready)
+                    keyboard.setEndpointStatus(EndpointStatus.Ready)
                     keyboard.tryStartRecording()
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-listening-$label")
                     keyboard.reset()

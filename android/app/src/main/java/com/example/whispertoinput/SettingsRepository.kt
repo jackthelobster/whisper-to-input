@@ -33,7 +33,8 @@ val AUTO_SWITCH_BACK = booleanPreferencesKey("auto-switch-back")
 val ADD_TRAILING_SPACE = booleanPreferencesKey("add-trailing-space")
 val SHOW_SHIFT_ENTER = booleanPreferencesKey("show-shift-enter")
 val POSTPROCESSING = stringPreferencesKey("postprocessing")
-val ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-gx10")
+val ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-http")
+private val LEGACY_ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-gx10")
 
 class SettingsRepository internal constructor(
     private val store: DataStore<Preferences>,
@@ -54,7 +55,13 @@ class SettingsRepository internal constructor(
         mutex.withLock {
             cached?.let { return@withLock it }
             try {
-                val preferences = store.data.first()
+                val original = store.data.first()
+                val preferences = if (original[LEGACY_ALLOW_INSECURE] != null) store.edit { preferences ->
+                    if (preferences[ALLOW_INSECURE] == null) {
+                        preferences[LEGACY_ALLOW_INSECURE]?.let { preferences[ALLOW_INSECURE] = it }
+                    }
+                    preferences.remove(LEGACY_ALLOW_INSECURE)
+                } else original
                 if (preferences[CREDENTIAL_RECOVERY_REQUIRED] == true) {
                     throw TranscriptionException("Saved credentials require recovery. Re-enter and save your settings.")
                 }
@@ -124,6 +131,7 @@ class SettingsRepository internal constructor(
                         it[ADD_TRAILING_SPACE] = settings.trailingSpace
                         it[SHOW_SHIFT_ENTER] = settings.showShiftEnter
                         it[ALLOW_INSECURE] = settings.allowInsecure
+                        it.remove(LEGACY_ALLOW_INSECURE)
                         it.remove(CREDENTIAL_RECOVERY_REQUIRED)
                     }
                     cached = settings

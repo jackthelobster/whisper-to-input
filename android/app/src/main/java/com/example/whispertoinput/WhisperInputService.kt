@@ -22,6 +22,8 @@ package com.example.whispertoinput
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.IBinder
 import android.os.SystemClock
 import android.view.KeyEvent
@@ -30,6 +32,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import com.example.whispertoinput.keyboard.WhisperKeyboard
+import com.example.whispertoinput.keyboard.WhisperKeyboard.EndpointStatus
 import com.example.whispertoinput.recorder.RecorderManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +62,7 @@ class WhisperInputService : InputMethodService() {
     private val repository by lazy { SettingsRepository.get(this) }
     private var networkCallbackRegistered = false
     private var networkRefreshJob: Job? = null
+    private val networkRefreshHandler = Handler(Looper.getMainLooper())
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = refreshAfterNetworkChange()
@@ -94,7 +98,8 @@ class WhisperInputService : InputMethodService() {
     }
 
     private fun refreshAfterNetworkChange() {
-        serviceScope.launch {
+        networkRefreshHandler.post {
+            if (destroyed) return@post
             // Connectivity delivers availability, capabilities and routes in a burst.
             networkRefreshJob?.cancel()
             networkRefreshJob = serviceScope.launch refresh@{
@@ -219,7 +224,7 @@ class WhisperInputService : InputMethodService() {
         val allowed = EditorPolicy.allowsDictation(session.inputType, session.imeOptions)
         whisperKeyboard.setSensitiveInput(!allowed)
         whisperKeyboard.reset()
-        whisperKeyboard.setEndpointStatus(R.string.testing_connection)
+        whisperKeyboard.setEndpointStatus(EndpointStatus.Checking)
         if (!allowed) return
         startAvailabilityChecks(session)
     }
@@ -234,7 +239,7 @@ class WhisperInputService : InputMethodService() {
     private fun startAvailabilityChecks(session: EditorSession, checkBoth: Boolean = false) {
         settingsJob?.cancel()
         session.endpointProbeTimedOut = false
-        whisperKeyboard.setEndpointStatus(R.string.testing_connection)
+        whisperKeyboard.setEndpointStatus(EndpointStatus.Checking)
         settingsJob = serviceScope.launch {
             val schedule = EndpointPollSchedule()
             var checkAll = checkBoth
@@ -255,11 +260,11 @@ class WhisperInputService : InputMethodService() {
                 session.selectedSettings = selected
                 session.endpointProbeTimedOut = result?.shouldPausePolling() == true
                 whisperKeyboard.setEndpointStatus(when {
-                    selected == null -> R.string.endpoint_unavailable
-                    selected.endpoint == settings.endpoint && result.selectedProbe != ProbeResult.Ready -> R.string.endpoint_unverified
-                    selected.endpoint != settings.endpoint && result.selectedProbe != ProbeResult.Ready -> R.string.endpoint_unverified_fallback
-                    selected.endpoint != settings.endpoint -> R.string.keyboard_ready_fallback
-                    else -> R.string.keyboard_ready
+                    selected == null -> EndpointStatus.Unavailable
+                    selected.endpoint == settings.endpoint && result.selectedProbe != ProbeResult.Ready -> EndpointStatus.Unverified
+                    selected.endpoint != settings.endpoint && result.selectedProbe != ProbeResult.Ready -> EndpointStatus.UnverifiedFallback
+                    selected.endpoint != settings.endpoint -> EndpointStatus.ReadyFallback
+                    else -> EndpointStatus.Ready
                 }, result?.statusText(this@WhisperInputService) ?: getString(R.string.settings_load_failed))
                 // A late check must never restart a microphone after a manual gesture.
                 if (selected != null && settings.autoRecord == true && !session.userInteracted &&
