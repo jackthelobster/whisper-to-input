@@ -99,3 +99,14 @@ jobs:
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
             android/app/build/screenshots/
+
+  openrouter:
+    if: github.event_name != 'pull_request' && github.repository == 'jackthelobster/whisper-to-input'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Verify OpenRouter authentication and model discovery
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python3 scripts/check-openrouter.py

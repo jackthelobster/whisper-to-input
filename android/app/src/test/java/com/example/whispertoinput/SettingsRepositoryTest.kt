@@ -55,7 +55,7 @@ class SettingsRepositoryTest {
         val first = repository.load()
         credentials.failRead = true
         assertEquals(first, repository.load())
-        val updated = first.copy(model = "updated-model", allowInsecure = true)
+        val updated = first.copy(endpoint = "https://example.test/transcribe", model = "updated-model", allowInsecure = true)
         repository.save(updated)
         assertEquals(updated, repository.load())
         assertEquals(1L, repository.changes.value)
@@ -66,7 +66,7 @@ class SettingsRepositoryTest {
         val repository = SettingsRepository(MemoryStore(), credentials)
         val first = repository.load()
         credentials.failWrite = true
-        try { repository.save(first.copy(allowInsecure = true)); fail("Save must fail") } catch (_: TranscriptionException) { }
+        try { repository.save(first.copy(endpoint = "https://example.test/transcribe", allowInsecure = true)); fail("Save must fail") } catch (_: TranscriptionException) { }
         try { repository.load(); fail("Cache must be invalidated") } catch (_: TranscriptionException) { }
         assertEquals(1L, repository.changes.value)
     }
@@ -104,13 +104,13 @@ class SettingsRepositoryTest {
         val repository = SettingsRepository(store, MemoryCredentials())
         assertFalse(repository.load().allowInsecure)
         assertNull(store.state.value[legacy])
-        repository.save(repository.load().copy(allowInsecure = true))
+        repository.save(repository.load().copy(endpoint = "http://example.test/transcribe", allowInsecure = true))
         assertTrue(SettingsRepository(store, MemoryCredentials()).load().allowInsecure)
     }
 
-    @Test fun defaultsMatchApprovedEndpointAndSafeUiFlags() = runBlocking {
+    @Test fun defaultsHaveNoEndpointAndSafeUiFlags() = runBlocking {
         val settings = SettingsRepository(MemoryStore(), MemoryCredentials()).load()
-        assertEquals(AppSettings.DEFAULT_ENDPOINT, settings.endpoint)
+        assertEquals("", settings.endpoint)
         assertEquals(AppSettings.DEFAULT_MODEL, settings.model)
         assertEquals("en", settings.language)
         assertEquals("", settings.apiKey)
@@ -125,7 +125,7 @@ class SettingsRepositoryTest {
         val store = MemoryStore()
         val credentials = MemoryCredentials()
         val repository = SettingsRepository(store, credentials)
-        repository.save(AppSettings(showShiftEnter = true, allowInsecure = true))
+        repository.save(AppSettings(endpoint = "https://example.test/transcribe", showShiftEnter = true, allowInsecure = true))
         assertTrue(SettingsRepository(store, credentials).load().showShiftEnter)
         repository.save(repository.load().copy(showShiftEnter = false))
         assertFalse(SettingsRepository(store, credentials).load().showShiftEnter)
@@ -197,7 +197,7 @@ class SettingsRepositoryTest {
             fail("Expected migration failure")
         } catch (_: TranscriptionException) { }
         try {
-            repository.save(AppSettings(allowInsecure = true))
+            repository.save(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true))
             fail("Expected recovery save failure")
         } catch (e: TranscriptionException) {
             assertFalse(e.message!!.contains("private"))
@@ -205,7 +205,7 @@ class SettingsRepositoryTest {
         assertRecoveryRequired(store, credentials)
         credentials.failWrite = false
         assertRecoveryRequired(store, credentials)
-        repository.save(AppSettings(allowInsecure = true))
+        repository.save(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true))
         assertNull(store.state.value[CREDENTIAL_RECOVERY_REQUIRED])
         assertEquals("", repository.load().apiKey)
     }
@@ -214,7 +214,7 @@ class SettingsRepositoryTest {
         val store = MemoryStore(preferencesOf(API_KEY to "stale-token"))
         val credentials = MemoryCredentials("previous-token").apply { failWrite = true }
         try {
-            SettingsRepository(store, credentials).save(AppSettings(allowInsecure = true))
+            SettingsRepository(store, credentials).save(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true))
             fail("Expected credential save failure")
         } catch (_: TranscriptionException) { }
         assertEquals("previous-token", credentials.value)
@@ -295,7 +295,7 @@ class SettingsRepositoryTest {
     @Test fun explicitRecoveryCanClearAnUnreadableCredential() = runBlocking {
         val credentials = MemoryCredentials("damaged-key").apply { failRead = true }
         val repository = SettingsRepository(MemoryStore(), credentials)
-        repository.save(AppSettings(allowInsecure = true))
+        repository.save(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true))
         credentials.failRead = false
         assertEquals("", repository.load().apiKey)
     }
@@ -346,7 +346,7 @@ class SettingsRepositoryTest {
         } catch (_: TranscriptionException) { }
         fallback.failWrite = true
         try {
-            SettingsRepository(store, main, fallback).save(AppSettings(allowInsecure = true))
+            SettingsRepository(store, main, fallback).save(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true))
             fail("Failed credential persistence must require recovery")
         } catch (_: TranscriptionException) { }
         assertRecoveryRequired(store, main)

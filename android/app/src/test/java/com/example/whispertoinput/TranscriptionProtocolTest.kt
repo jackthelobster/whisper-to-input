@@ -10,17 +10,17 @@ import org.junit.rules.TemporaryFolder
 class TranscriptionProtocolTest {
     @get:Rule val temporary = TemporaryFolder()
 
-    private fun request(settings: AppSettings = AppSettings(allowInsecure = true)) = TranscriptionProtocol.buildRequest(
+    private fun request(settings: AppSettings = AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true)) = TranscriptionProtocol.buildRequest(
         settings, temporary.newFile().apply { writeBytes(byteArrayOf(1, 2, 3)) }, "audio/mp4"
     )
 
-    @Test fun defaultSettingsCannotUploadWithoutHttpOptIn() {
+    @Test fun unconfiguredSettingsCannotUpload() {
         assertThrows(TranscriptionException::class.java) { request(AppSettings()) }
     }
 
     @Test fun optedInLocalEndpointIsKeylessAndMultipartHasBoundary() {
         val request = request()
-        assertEquals(AppSettings.DEFAULT_ENDPOINT, request.url.toString())
+        assertEquals("http://gx10:8020/v1/audio/transcriptions", request.url.toString())
         assertNull(request.header("Authorization"))
         assertNull(request.header("Content-Type")) // The transport derives it from the body.
         val body = request.body as MultipartBody
@@ -52,7 +52,7 @@ class TranscriptionProtocolTest {
 
     @Test fun blankLanguageOmitsLanguageForAutomaticDetection() {
         val buffer = Buffer()
-        request(AppSettings(language = "", allowInsecure = true)).body!!.writeTo(buffer)
+        request(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", language = "", allowInsecure = true)).body!!.writeTo(buffer)
         assertFalse(buffer.readUtf8().contains("name=\"language\""))
     }
 
@@ -77,16 +77,16 @@ class TranscriptionProtocolTest {
     @Test fun invalidRecordingAndModelAreRejectedBeforeNetworking() {
         val empty = temporary.newFile()
         assertThrows(TranscriptionException::class.java) {
-            TranscriptionProtocol.buildRequest(AppSettings(allowInsecure = true), empty, "audio/mp4")
+            TranscriptionProtocol.buildRequest(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true), empty, "audio/mp4")
         }
-        assertThrows(TranscriptionException::class.java) { request(AppSettings(model = "")) }
+        assertThrows(TranscriptionException::class.java) { request(AppSettings(endpoint = "https://example.test/transcribe", model = "")) }
         assertThrows(TranscriptionException::class.java) {
-            TranscriptionProtocol.buildRequest(AppSettings(allowInsecure = true), empty.apply { writeText("audio") }, "text/plain")
+            TranscriptionProtocol.buildRequest(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true), empty.apply { writeText("audio") }, "text/plain")
         }
     }
 
     @Test fun invalidFallbackModelAndLanguageAreRejected() {
-        val settings = AppSettings(allowInsecure = true, fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions")
+        val settings = AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true, fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions")
         assertThrows(TranscriptionException::class.java) {
             TranscriptionProtocol.validateSettings(settings.copy(fallbackModel = ""))
         }

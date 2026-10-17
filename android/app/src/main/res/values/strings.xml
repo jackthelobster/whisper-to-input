@@ -102,7 +102,7 @@
     <string name="choose_keyboard">Choose keyboard</string>
     <string name="fallback_server_title">Fallback transcription server</string>
     <string name="server_title">Main transcription server</string>
-    <string name="server_description">OpenAI-compatible audio endpoint. Defaults are configured for gx10 and English dictation.</string>
+    <string name="server_description">Enter your OpenAI-compatible transcription endpoint to configure dictation.</string>
     <string name="behavior_title">Dictation preferences</string>
     <string name="allow_insecure">Allow unsecure HTTP</string>
     <string name="http_warning">Warning: HTTP sends audio and transcriptions without encryption. This setting applies to any host for both servers. Use only on a trusted network or encrypted VPN. API keys require HTTPS and are never sent over HTTP.</string>

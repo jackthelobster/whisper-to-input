@@ -4,9 +4,9 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EndpointPolicyTest {
-    @Test fun acceptsCustomHttpsAndDefaultHttpHost() {
+    @Test fun acceptsExplicitHttpsAndOptedInHttpHost() {
         assertTrue(EndpointPolicy.validate("https://example.test:8443/custom/transcribe", false).isHttps)
-        assertEquals("gx10", EndpointPolicy.validate(AppSettings(allowInsecure = true)).host)
+        assertEquals("gx10", EndpointPolicy.validate(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true)).host)
         assertEquals("gx10", EndpointPolicy.validate("http://gx10:8020/custom", true).host)
     }
 

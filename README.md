@@ -301,6 +301,17 @@ Please [open an issue](https://github.com/j3soon/whisper-to-input/issues) if you
 
 ## Developer Notes
 
+New installations start with an empty transcription endpoint. Configure an explicit
+OpenAI-compatible transcription URL before dictating; saved endpoints are preserved.
+
+The Android verification workflow also runs a read-only OpenRouter smoke check on
+trusted pushes and manual dispatches. Set the repository Actions secret
+`OPENROUTER_API_KEY`. The check authenticates with `GET /api/v1/key` and requires
+`openai/whisper-1` in `GET /api/v1/models?output_modalities=transcription`.
+It sends no audio and does not verify transcription or embed credentials in APKs.
+Pull-request runs skip this secret-backed check; their branch push runs perform it.
+
+
 To build and release a newer version, open Android Studio and follow the steps below:
 
 1. Bump the version code and version name.

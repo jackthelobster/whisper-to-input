@@ -170,7 +170,7 @@ class ExampleInstrumentedTest {
     }
 
     @Test fun credentialsAreEncryptedAndRoundTrip() = runBlocking {
-        val repository = SettingsRepository(context)
+        val repository = SettingsRepository.get(context)
         val secret = "instrumentation-only-placeholder-secret-7341"
         try {
             val fallbackSecret = "instrumentation-only-fallback-secret-9274"
@@ -187,12 +187,12 @@ class ExampleInstrumentedTest {
                 assertFalse("Plaintext fallback key found in ${it.name}", contents.contains(fallbackSecret))
             }
         } finally {
-            repository.save(AppSettings())
+            repository.save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions"))
         }
     }
 
     @Test fun settingsAndKeyboardRenderLightAndDarkAtS10eWidth() {
-        runBlocking { SettingsRepository(context).save(AppSettings()) }
+        runBlocking { SettingsRepository.get(context).save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions")) }
         for ((mode, label) in listOf(AppCompatDelegate.MODE_NIGHT_NO to "light", AppCompatDelegate.MODE_NIGHT_YES to "dark")) {
             InstrumentationRegistry.getInstrumentation().runOnMainSync { AppCompatDelegate.setDefaultNightMode(mode) }
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -200,7 +200,7 @@ class ExampleInstrumentedTest {
                 var loaded = false
                 while (!loaded && android.os.SystemClock.elapsedRealtime() < deadline) {
                     scenario.onActivity { activity ->
-                        loaded = editFields(activity.findViewById(android.R.id.content)).any { it.text.toString() == SettingsRepository.DEFAULT_ENDPOINT }
+                        loaded = editFields(activity.findViewById(android.R.id.content)).any { it.text.toString() == "https://example.com/v1/audio/transcriptions" }
                     }
                     if (!loaded) android.os.SystemClock.sleep(50)
                 }
@@ -272,7 +272,7 @@ class ExampleInstrumentedTest {
     }
 
     @Test fun actualInputMethodStartsAndBlocksPasswordField() {
-        runBlocking { SettingsRepository(context).save(AppSettings()) }
+        runBlocking { SettingsRepository.get(context).save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions")) }
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val serviceInfo = requireNotNull(automation.serviceInfo)
         serviceInfo.flags = serviceInfo.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or

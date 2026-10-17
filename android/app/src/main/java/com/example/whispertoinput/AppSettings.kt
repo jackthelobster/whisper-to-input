@@ -20,7 +20,7 @@ data class AppSettings(
     override fun toString(): String = "AppSettings(credentials and endpoint redacted)"
 
     companion object {
-        const val DEFAULT_ENDPOINT = "http://gx10:8020/v1/audio/transcriptions"
+        const val DEFAULT_ENDPOINT = ""
         const val DEFAULT_MODEL = "distil-whisper/distil-large-v3"
     }
 }
