@@ -13,6 +13,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.whispertoinput.keyboard.WhisperKeyboard
+import com.example.whispertoinput.keyboard.WhisperKeyboard.EndpointStatus
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -30,26 +31,168 @@ class ExampleInstrumentedTest {
         assertFalse(Manifest.permission.WRITE_EXTERNAL_STORAGE in permissions)
         assertFalse(Manifest.permission.POST_NOTIFICATIONS in permissions)
         assertTrue(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("gx10"))
-        assertFalse(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("api.openai.com"))
-        assertFalse(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("attacker.gx10"))
+        assertTrue(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("api.openai.com"))
+        assertTrue(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted("attacker.gx10"))
+    }
+
+    @Test fun inputMethodRegistersAsTemporaryVoiceInput() {
+        val manager = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val info = manager.inputMethodList.single { it.packageName == context.packageName }
+        assertEquals(1, info.subtypeCount)
+        val subtype = info.getSubtypeAt(0)
+        assertEquals("voice", subtype.mode)
+        assertTrue(subtype.isAuxiliary)
+        assertTrue("Voice subtype must be enabled without language selection", subtype.overridesImplicitlyEnabledSubtype())
+    }
+
+    @Test fun returnArrowWorksInEveryDictationState() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var switchRequests = 0
+                val keyboard = WhisperKeyboard()
+                val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {},
+                    { switchRequests++ }, {}, { false })
+                val back = view.findViewById<View>(R.id.btn_previous_ime)
+                fun pressBack() {
+                    assertEquals(View.VISIBLE, back.visibility)
+                    assertTrue(back.isEnabled)
+                    assertEquals(activity.getString(R.string.btn_previous_ime_hint), back.contentDescription)
+                    assertTrue(back.performClick())
+                }
+                pressBack() // Idle; independent of Android's next-IME availability hint.
+                keyboard.setSensitiveInput(true)
+                pressBack() // Password/private field.
+                keyboard.setSensitiveInput(false)
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
+                keyboard.tryStartRecording()
+                pressBack() // Listening.
+                keyboard.tryStartTranscribing("")
+                pressBack() // Uploading; the service cancels the request before switching.
+                keyboard.showError("Test transcription error")
+                pressBack()
+                assertEquals(5, switchRequests)
+                keyboard.reset()
+            }
+        }
+    }
+
+    @Test fun optionalShiftEnterShrinksSpaceAndOfflineMicRefreshes() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var recordings = 0
+                var refreshes = 0
+                var shiftedEnters = 0
+                val keyboard = WhisperKeyboard()
+                val view = keyboard.setup(activity.layoutInflater, { recordings++ }, {}, {}, {}, {}, {}, {}, {}, {},
+                    { false }, { shiftedEnters++ }, { refreshes++ })
+                val space = view.findViewById<View>(R.id.btn_space_bar)
+                val shift = view.findViewById<View>(R.id.btn_shift_enter)
+                fun measure() {
+                    view.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                }
+                measure()
+                val fullWidth = space.width
+                assertEquals(View.GONE, shift.visibility)
+                keyboard.setShowShiftEnter(true)
+                measure()
+                assertTrue(space.width < fullWidth)
+                val enter = view.findViewById<View>(R.id.btn_enter)
+                assertTrue(space.left > shift.right)
+                assertEquals(enter.left - space.right, space.left - shift.right)
+                shift.performClick()
+                assertEquals(1, shiftedEnters)
+                keyboard.setShowShiftEnter(false)
+                measure()
+                assertEquals(fullWidth, space.width)
+                val mic = view.findViewById<View>(R.id.btn_mic)
+                keyboard.setEndpointStatus(EndpointStatus.Unavailable)
+                mic.performClick()
+                assertEquals(1, refreshes)
+                assertEquals(0, recordings)
+                assertEquals(activity.getString(R.string.refresh_endpoints), mic.contentDescription)
+                keyboard.setEndpointStatus(EndpointStatus.Checking)
+                keyboard.tryStartRecording()
+                assertEquals(0, recordings)
+                assertFalse(mic.isEnabled)
+                for (endpoint in listOf(EndpointStatus.Ready, EndpointStatus.ReadyFallback,
+                    EndpointStatus.Unverified, EndpointStatus.UnverifiedFallback)) {
+                    keyboard.setEndpointStatus(endpoint)
+                    assertTrue(mic.isEnabled)
+                    val before = recordings
+                    mic.performClick()
+                    assertEquals(before + 1, recordings)
+                    keyboard.reset()
+                }
+            }
+        }
+    }
+
+    @Test fun endpointChecksUpdateIdleStatusWithoutInterruptingRecordingOrErrors() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val keyboard = WhisperKeyboard()
+                val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {}, {}, {}, { false })
+                val status = view.findViewById<android.widget.TextView>(R.id.label_status)
+                assertEquals(activity.getString(R.string.testing_connection), status.text.toString())
+                keyboard.setEndpointStatus(EndpointStatus.Unavailable)
+                assertEquals(activity.getString(R.string.endpoint_unavailable), status.text.toString())
+                val hint = view.findViewById<android.widget.TextView>(R.id.label_hint)
+                fun measureHeight(): Int {
+                    view.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                    return view.measuredHeight
+                }
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
+                val readyHeight = measureHeight()
+                val timeout = activity.getString(R.string.endpoint_probe_timeout)
+                keyboard.setEndpointStatus(EndpointStatus.Unavailable, timeout)
+                assertEquals("Endpoint(s) unavailable", status.text.toString())
+                assertEquals("Endpoint probe timeout", hint.text.toString())
+                assertEquals(readyHeight, measureHeight())
+                keyboard.setEndpointStatus(EndpointStatus.ReadyFallback)
+                assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
+                keyboard.tryStartRecording()
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
+                assertEquals(activity.getString(R.string.recording), status.text.toString())
+                keyboard.reset()
+                assertEquals(activity.getString(R.string.keyboard_ready), status.text.toString())
+                keyboard.showError("Retry your recording")
+                keyboard.setEndpointStatus(EndpointStatus.ReadyFallback)
+                assertEquals(activity.getString(R.string.keyboard_error), status.text.toString())
+                keyboard.reset()
+                assertEquals("Ready. Using the fallback endpoint.", status.text.toString())
+            }
+        }
     }
 
     @Test fun credentialsAreEncryptedAndRoundTrip() = runBlocking {
-        val repository = SettingsRepository(context)
+        val repository = SettingsRepository.get(context)
         val secret = "instrumentation-only-placeholder-secret-7341"
         try {
-            repository.save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions", apiKey = secret, allowInsecure = false))
+            val fallbackSecret = "instrumentation-only-fallback-secret-9274"
+            repository.save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = secret,
+                fallbackEndpoint = "https://fallback.example.com/v1/audio/transcriptions",
+                fallbackApiKey = fallbackSecret, allowInsecure = false))
+            assertEquals(fallbackSecret, repository.load().fallbackApiKey)
             assertEquals(secret, repository.load().apiKey)
             val privateFiles = File(context.applicationInfo.dataDir).walkTopDown().filter { it.isFile && (it.path.contains("shared_prefs") || it.path.contains("datastore")) }.toList()
             assertTrue(privateFiles.isNotEmpty())
-            privateFiles.forEach { assertFalse("Plaintext API key found in ${it.name}", it.readBytes().toString(Charsets.ISO_8859_1).contains(secret)) }
+            privateFiles.forEach {
+                val contents = it.readBytes().toString(Charsets.ISO_8859_1)
+                assertFalse("Plaintext API key found in ${it.name}", contents.contains(secret))
+                assertFalse("Plaintext fallback key found in ${it.name}", contents.contains(fallbackSecret))
+            }
         } finally {
-            repository.save(AppSettings())
+            repository.save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = "instrumentation-only-openrouter-key"))
         }
     }
 
     @Test fun settingsAndKeyboardRenderLightAndDarkAtS10eWidth() {
-        runBlocking { SettingsRepository(context).save(AppSettings()) }
+        runBlocking { SettingsRepository.get(context).save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = "instrumentation-only-openrouter-key")) }
         for ((mode, label) in listOf(AppCompatDelegate.MODE_NIGHT_NO to "light", AppCompatDelegate.MODE_NIGHT_YES to "dark")) {
             InstrumentationRegistry.getInstrumentation().runOnMainSync { AppCompatDelegate.setDefaultNightMode(mode) }
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -57,25 +200,47 @@ class ExampleInstrumentedTest {
                 var loaded = false
                 while (!loaded && android.os.SystemClock.elapsedRealtime() < deadline) {
                     scenario.onActivity { activity ->
-                        loaded = editFields(activity.findViewById(android.R.id.content)).any { it.text.toString() == SettingsRepository.DEFAULT_ENDPOINT }
+                        loaded = editFields(activity.findViewById(android.R.id.content)).any { it.text.toString() == "https://openrouter.ai/api/v1/audio/transcriptions" }
                     }
                     if (!loaded) android.os.SystemClock.sleep(50)
                 }
                 assertTrue("Settings did not load", loaded)
                 scenario.onActivity { activity ->
+                    assertEquals("openai/whisper-1", activity.findViewById<EditText>(R.id.field_model).text.toString())
+                    assertEquals("instrumentation-only-openrouter-key", activity.findViewById<EditText>(R.id.field_api_key).text.toString())
                     assertTrue("Settings screen must protect secrets from screenshots", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                     capture(activity.findViewById(android.R.id.content), activity.getExternalFilesDir(null)!!, "settings-$label")
                     val keyboard = WhisperKeyboard()
-                    val view = keyboard.setup(activity.layoutInflater, true, {}, {}, {}, {}, {}, {}, {}, {}, {}, { false })
+                    val view = keyboard.setup(activity.layoutInflater, {}, {}, {}, {}, {}, {}, {}, {}, {}, { true })
                     activity.setContentView(view)
                     view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
                     view.layout(0, 0, view.measuredWidth, view.measuredHeight)
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-$label")
+                    keyboard.setShowShiftEnter(true)
+                    view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                    val shiftEnter = view.findViewById<View>(R.id.btn_shift_enter)
+                    val enter = view.findViewById<View>(R.id.btn_enter)
+                    assertEquals(View.VISIBLE, shiftEnter.visibility)
+                    assertEquals(enter.width, shiftEnter.width)
+                    assertEquals(enter.height, shiftEnter.height)
+                    val space = view.findViewById<View>(R.id.btn_space_bar)
+                    assertTrue(space.left > shiftEnter.right)
+                    assertEquals(enter.left - space.right, space.left - shiftEnter.right)
+                    capture(view, activity.getExternalFilesDir(null)!!, "keyboard-shift-enter-$label")
+                    keyboard.setShowShiftEnter(false)
+                    view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
                     keyboard.setSensitiveInput(true)
                     assertFalse(view.findViewById<View>(R.id.btn_mic).isEnabled)
                     keyboard.setSensitiveInput(false)
+                    keyboard.setEndpointStatus(EndpointStatus.Ready)
                     keyboard.tryStartRecording()
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-listening-$label")
+                    keyboard.reset()
+                    keyboard.showError("Transcription failed. Tap retry to try again.")
+                    assertEquals(View.VISIBLE, view.findViewById<View>(R.id.btn_retry).visibility)
+                    capture(view, activity.getExternalFilesDir(null)!!, "keyboard-retry-$label")
                     keyboard.reset()
                 }
             }
@@ -109,7 +274,7 @@ class ExampleInstrumentedTest {
     }
 
     @Test fun actualInputMethodStartsAndBlocksPasswordField() {
-        runBlocking { SettingsRepository(context).save(AppSettings()) }
+        runBlocking { SettingsRepository.get(context).save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = "instrumentation-only-openrouter-key")) }
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val serviceInfo = requireNotNull(automation.serviceInfo)
         serviceInfo.flags = serviceInfo.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or

@@ -135,6 +135,68 @@
                             android:saveEnabled="false"
                             android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout style="@style/CardContents">
+                    <TextView android:id="@+id/fallback_server_heading" style="@style/SettingsLabel" android:text="@string/fallback_server_title" />
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_fallback_endpoint"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_fallback_endpoint"
+                        app:helperText="@string/settings_fallback_endpoint_desc">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_fallback_endpoint"
+                            style="@style/SettingsField"
+                            android:inputType="textUri"
+                            android:imeOptions="actionNext"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_fallback_model"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_model">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_fallback_model"
+                            style="@style/SettingsField"
+                            android:inputType="textNoSuggestions"
+                            android:imeOptions="actionNext"
+                            android:maxLines="2" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_fallback_language"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_language_code"
+                        app:helperText="@string/settings_language_code_desc">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_fallback_language_code"
+                            style="@style/SettingsField"
+                            android:inputType="textNoSuggestions"
+                            android:imeOptions="actionNext"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/input_fallback_api_key"
+                        style="@style/SettingsInput"
+                        android:hint="@string/settings_fallback_api_key"
+                        android:importantForAutofill="noExcludeDescendants"
+                        android:saveEnabled="false"
+                        app:helperText="@string/settings_api_key_desc">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/field_fallback_api_key"
+                            style="@style/SettingsField"
+                            android:inputType="textPassword"
+                            android:imeOptions="actionDone|flagNoPersonalizedLearning"
+                            android:importantForAutofill="noExcludeDescendants"
+                            android:saveEnabled="false"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout style="@style/CardContents">
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_allow_insecure"
                         style="@style/SettingsSwitch"
@@ -143,6 +205,7 @@
                         style="@style/SettingsDescription"
                         android:layout_marginTop="4dp"
                         android:layout_marginBottom="8dp"
+                        android:textColor="@color/app_error"
                         android:text="@string/http_warning" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_test_connection"
@@ -182,6 +245,12 @@
                         android:layout_marginTop="12dp"
                         android:text="@string/settings_add_trailing_space" />
                     <TextView style="@style/SettingsDescription" android:text="@string/settings_add_trailing_space_desc" />
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_shift_enter"
+                        style="@style/SettingsSwitch"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/settings_show_shift_enter" />
+                    <TextView style="@style/SettingsDescription" android:text="@string/settings_show_shift_enter_desc" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>

@@ -22,7 +22,7 @@ The current transcription server requires the phone to resolve gx10 and reach TC
 | Model | distil-whisper/distil-large-v3 |
 | Language | en |
 | API key | Empty; the current server does not require one |
-| Allow local HTTP | On, restricted to the exact host gx10 |
+| Allow unsecure HTTP | On; applies to any configured host |
 | Auto-record | Off |
 | Auto-switch keyboard | Off |
 
@@ -31,8 +31,8 @@ The current transcription server requires the phone to resolve gx10 and reach TC
 
 ## Privacy and expected behavior
 
-- HTTP itself does not encrypt audio. The gx10 exception is suitable only for a trusted private network or an encrypted VPN. Other servers require HTTPS. API keys are never allowed with HTTP.
-- There is no silent fallback to OpenAI or another transcription service.
+- HTTP itself does not encrypt audio or transcriptions. “Allow unsecure HTTP” applies to both servers on any host and displays a warning. Use HTTP only on a trusted private network or an encrypted VPN. API keys require HTTPS.
+- Fallback is optional and uses only the server you configure. Main and fallback each have their own model, language and optional API key. Leave the fallback URL empty to disable it.
 - API keys, when used with HTTPS endpoints, are encrypted with Android Keystore-backed AES-GCM. App settings and credentials are excluded from cloud and device-transfer backup. The settings screen blocks ordinary screenshots because it can contain secrets.
 - Audio uses unique internal-cache files. Cancel, hiding the keyboard or changing editor clears the current recording and cancels the network call. Successful transcription removes the audio. Failed uploads can be retried only while the originating editor remains active.
 - Pressing Enter while recording finishes dictation without implicitly submitting a message. Pressing Enter while idle respects the target app's editor action and may submit if that app specifies Send.
@@ -53,4 +53,4 @@ These checks cannot be certified by an emulator. Run them on the S10e after inst
 - [ ] Switching back to Samsung Keyboard works.
 - [ ] Light/dark mode, a larger system font and landscape remain usable.
 
-If the phone cannot reach gx10, check its DNS/VPN route first. Do not solve that by enabling global cleartext, bypassing TLS validation or adding credentials to an HTTP URL. The current exception intentionally does not accept arbitrary HTTP hosts or IP addresses; a different hostname should be introduced through an explicit policy change or HTTPS.
+If the phone cannot reach gx10, check its DNS/VPN route first. Other hosts and IP addresses can be configured with HTTPS or, on a trusted network, with “Allow unsecure HTTP” enabled. Never bypass TLS validation or add credentials to an HTTP URL.

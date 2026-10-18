@@ -15,4 +15,5 @@
     <color name="dark_gray">@color/app_on_surface_variant</color>
     <color name="theme_light_grey">@color/app_background</color>
     <color name="theme_rich_black">@color/app_on_surface</color>
+    <color name="endpoint_refresh_background">#757575</color>
 </resources>

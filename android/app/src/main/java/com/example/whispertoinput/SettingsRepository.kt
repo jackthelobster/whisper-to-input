@@ -11,6 +11,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -18,6 +20,9 @@ import kotlinx.coroutines.withContext
 // The sole DataStore delegate: services and UI must not create another settings store.
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 val SPEECH_TO_TEXT_BACKEND = stringPreferencesKey("speech-to-text-backend")
+val FALLBACK_MODEL = stringPreferencesKey("fallback-model")
+val FALLBACK_LANGUAGE_CODE = stringPreferencesKey("fallback-language-code")
+val FALLBACK_ENDPOINT = stringPreferencesKey("fallback-endpoint")
 val ENDPOINT = stringPreferencesKey("endpoint")
 val LANGUAGE_CODE = stringPreferencesKey("language-code")
 val API_KEY = stringPreferencesKey("api-key") // Legacy migration only. Never write plaintext here.
@@ -26,22 +31,37 @@ val MODEL = stringPreferencesKey("model")
 val AUTO_RECORDING_START = booleanPreferencesKey("is-auto-recording-start")
 val AUTO_SWITCH_BACK = booleanPreferencesKey("auto-switch-back")
 val ADD_TRAILING_SPACE = booleanPreferencesKey("add-trailing-space")
+val SHOW_SHIFT_ENTER = booleanPreferencesKey("show-shift-enter")
 val POSTPROCESSING = stringPreferencesKey("postprocessing")
-val ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-gx10")
+val ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-http")
+private val LEGACY_ALLOW_INSECURE = booleanPreferencesKey("allow-insecure-gx10")
 
 class SettingsRepository internal constructor(
     private val store: DataStore<Preferences>,
-    private val credentials: CredentialStore
+    private val credentials: CredentialStore,
+    private val fallbackCredentials: CredentialStore? = null
 ) {
     constructor(context: Context) : this(
         context.applicationContext.dataStore,
-        KeystoreCredentialStore(context.applicationContext)
+        KeystoreCredentialStore(context.applicationContext),
+        KeystoreCredentialStore(context.applicationContext, ".fallback")
     )
+
+    private var cached: AppSettings? = null
+    private val revision = MutableStateFlow(0L)
+    val changes = revision.asStateFlow()
 
     suspend fun load(): AppSettings = withContext(Dispatchers.IO) {
         mutex.withLock {
+            cached?.let { return@withLock it }
             try {
-                val preferences = store.data.first()
+                val original = store.data.first()
+                val preferences = if (original[LEGACY_ALLOW_INSECURE] != null) store.edit { preferences ->
+                    if (preferences[ALLOW_INSECURE] == null) {
+                        preferences[LEGACY_ALLOW_INSECURE]?.let { preferences[ALLOW_INSECURE] = it }
+                    }
+                    preferences.remove(LEGACY_ALLOW_INSECURE)
+                } else original
                 if (preferences[CREDENTIAL_RECOVERY_REQUIRED] == true) {
                     throw TranscriptionException("Saved credentials require recovery. Re-enter and save your settings.")
                 }
@@ -54,7 +74,16 @@ class SettingsRepository internal constructor(
                 if (boundEndpoint != null && boundEndpoint != endpoint) {
                     throw TranscriptionException("Saved credentials do not match the endpoint. Re-enter and save your settings.")
                 }
+                val fallbackEndpoint = preferences[FALLBACK_ENDPOINT].orEmpty()
+                val fallbackBinding = fallbackCredentials?.boundEndpoint()
+                if (fallbackBinding != null && fallbackBinding != fallbackEndpoint) {
+                    throw TranscriptionException("Saved fallback credentials do not match the endpoint.")
+                }
                 AppSettings(
+                    fallbackEndpoint = fallbackEndpoint,
+                    fallbackModel = preferences[FALLBACK_MODEL] ?: preferences[MODEL]?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL,
+                    fallbackLanguage = preferences[FALLBACK_LANGUAGE_CODE] ?: preferences[LANGUAGE_CODE] ?: "en",
+                    fallbackApiKey = fallbackCredentials?.read().orEmpty(),
                     endpoint = endpoint,
                     model = preferences[MODEL]?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL,
                     language = preferences[LANGUAGE_CODE] ?: "en",
@@ -62,8 +91,9 @@ class SettingsRepository internal constructor(
                     autoRecord = preferences[AUTO_RECORDING_START] ?: false,
                     autoSwitch = preferences[AUTO_SWITCH_BACK] ?: false,
                     trailingSpace = preferences[ADD_TRAILING_SPACE] ?: false,
-                    allowInsecure = preferences[ALLOW_INSECURE] ?: true
-                )
+                    showShiftEnter = preferences[SHOW_SHIFT_ENTER] ?: false,
+                    allowInsecure = preferences[ALLOW_INSECURE] ?: false
+                ).also { cached = it }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -76,6 +106,7 @@ class SettingsRepository internal constructor(
     suspend fun save(settings: AppSettings): Unit = withContext(Dispatchers.IO) {
         TranscriptionProtocol.validateSettings(settings)
         mutex.withLock {
+            cached = null
             try {
                 // Once persisting starts, finish both stores even if the UI is destroyed.
                 withContext(NonCancellable) {
@@ -86,21 +117,31 @@ class SettingsRepository internal constructor(
                         it.remove(API_KEY)
                     }
                     credentials.writeBound(settings.apiKey, settings.endpoint)
+                    check(fallbackCredentials != null || settings.fallbackApiKey.isEmpty())
+                    fallbackCredentials?.writeBound(settings.fallbackApiKey, settings.fallbackEndpoint)
                     store.edit {
                         it[ENDPOINT] = settings.endpoint
+                        it[FALLBACK_ENDPOINT] = settings.fallbackEndpoint
+                        it[FALLBACK_MODEL] = settings.fallbackModel
+                        it[FALLBACK_LANGUAGE_CODE] = settings.fallbackLanguage
                         it[MODEL] = settings.model
                         it[LANGUAGE_CODE] = settings.language
                         it[AUTO_RECORDING_START] = settings.autoRecord
                         it[AUTO_SWITCH_BACK] = settings.autoSwitch
                         it[ADD_TRAILING_SPACE] = settings.trailingSpace
+                        it[SHOW_SHIFT_ENTER] = settings.showShiftEnter
                         it[ALLOW_INSECURE] = settings.allowInsecure
+                        it.remove(LEGACY_ALLOW_INSECURE)
                         it.remove(CREDENTIAL_RECOVERY_REQUIRED)
                     }
+                    cached = settings
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 throw TranscriptionException("Settings could not be saved securely. Please try again.")
+            } finally {
+                revision.value += 1
             }
         }
     }
@@ -120,6 +161,12 @@ class SettingsRepository internal constructor(
     }
 
     companion object {
+        @Volatile private var shared: SettingsRepository? = null
+
+        fun get(context: Context): SettingsRepository = shared ?: synchronized(this) {
+            shared ?: SettingsRepository(context.applicationContext).also { shared = it }
+        }
+
         const val DEFAULT_ENDPOINT = AppSettings.DEFAULT_ENDPOINT
         const val DEFAULT_MODEL = AppSettings.DEFAULT_MODEL
         // Serializes migration/save across independently constructed UI and service repositories.

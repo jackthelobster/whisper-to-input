@@ -44,8 +44,8 @@ class TranscriptionClientTest {
         })
         .proxy(Proxy.NO_PROXY).build().also { networkClients += it }
 
-    private fun settings() = AppSettings(endpoint = server.url("/v1/audio/transcriptions?tenant=test")
-        .newBuilder().host("gx10").build().toString())
+    private fun settings() = AppSettings(model = "whisper-1", endpoint = server.url("/v1/audio/transcriptions?tenant=test")
+        .newBuilder().host("gx10").build().toString(), allowInsecure = true)
     private fun audio() = temporary.newFile().apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
 
     @Test fun wireRequestHasCorrectMultipartBoundaryAndNoAccidentalQuery() = runBlocking {
@@ -61,7 +61,7 @@ class TranscriptionClientTest {
         val payload = request.body.readUtf8()
         assertTrue(payload.startsWith("--$boundary\r\n"))
         assertTrue(payload.contains("name=\"model\""))
-        assertTrue(payload.contains("\r\n\r\n${AppSettings.DEFAULT_MODEL}\r\n"))
+        assertTrue(payload.contains("\r\n\r\nwhisper-1\r\n"))
         assertTrue(payload.contains("name=\"language\""))
         assertTrue(payload.contains("\r\n\r\nen\r\n"))
     }

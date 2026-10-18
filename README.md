@@ -10,7 +10,7 @@ This fork targets a Samsung Galaxy S10e running Android 12. It provides a native
 | Model | distil-whisper/distil-large-v3 |
 | Language | en |
 | API key | Leave blank for the current server |
-| Allow local HTTP | Enabled for gx10 only |
+| Allow unsecure HTTP | Enabled; applies to any configured host |
 | Auto-record | Off by default |
 
 Only English is supported by this particular distil-whisper server. Other OpenAI-compatible transcription servers can be configured using HTTPS. This fork focuses on that multipart API; the upstream ASR-specific route, NIM OGG mode and Chinese conversion settings are not retained.
@@ -19,11 +19,19 @@ Only English is supported by this particular distil-whisper server. Other OpenAI
 
 1. Install the fork’s signed APK, not the upstream release linked further below. The fork uses a separate application ID, com.jackthelobster.whispertoinput, so it can coexist with the original.
 2. Open the app and grant microphone permission using its setup button. No notification or storage permission is needed.
-3. Enable the keyboard using the app’s Enable button, then use Choose keyboard. Samsung also exposes this under Settings → General management → Keyboard list and default.
+3. Enable Whisper Input using the app’s Enable button. Samsung also exposes this under Settings → General management → Keyboard list and default. Keep Samsung Keyboard (or your usual typing keyboard) as the default. With a text field and the typing keyboard open, use the navigation bar’s keyboard button to select Whisper Input.
 4. Keep the pre-filled settings above, use Test connection, and save any changes. The S10e must be able to resolve gx10 and reach port 8020 through your local network or VPN.
 5. In an ordinary text field, switch to Whisper Input. Tap the microphone, speak English, then tap Stop to transcribe and insert text. Cancel discards audio. Failed uploads can be retried only while the same field remains active. Switching fields or hiding the keyboard cancels work and deletes the recording.
 
-HTTP itself is unencrypted. The exception is restricted to exact gx10, requires the local-HTTP switch, and never accepts an API key. Use only over a trusted private network or encrypted VPN; use HTTPS for other servers. Password/private fields disable dictation. A recording is limited to two minutes.
+The app checks the configured server on launch and whenever voice input opens, then every 30–60 seconds (jittered) while an endpoint is usable and the voice keyboard is visible, including during recording and transcription. When no endpoint is usable, retries back off at roughly 10, 20 and 40 seconds with downward jitter; a probe timeout pauses automatic checks until an explicit refresh. It shows “Ready.” only after `/v1/models` responds successfully and lists the selected model. A missing `/models` endpoint (HTTP 404/405), an unreadable model list (including a list exceeding the diagnostic size limit), or a list without the configured model leaves dictation available with a “Model unverified” status. Manual recording and auto-record can still attempt transcription. Failed connections, authentication, redirects and other HTTP errors show an unavailable status. These checks send no audio and do not prove that transcription will succeed.
+
+Settings group the main and fallback transcription servers separately, each with its own URL, model, language and optional API key. Leave the fallback URL empty to disable it. Existing fallback configurations initially inherit the previously shared model and language. Checks probe main and fallback concurrently, preferring a verified main, then a verified fallback, then an unverified main or fallback. When fallback passes, the keyboard shows “Ready. Using the fallback endpoint.” and sends subsequent dictation to fallback. The next check always retries main and switches back when it is available. Checks stop when the keyboard hides or the input session ends. An upload already in progress finishes on its original endpoint.
+
+The top-left back arrow returns to the previous typing keyboard. It is available while listening, transcribing, idle or in a protected field; leaving cancels unfinished dictation. If Android has no previous keyboard, the arrow opens the keyboard picker. Enable “Return to previous keyboard” in settings to return automatically after successful transcription.
+
+Whisper Input registers as an auxiliary voice input rather than a typing keyboard. Android makes auxiliary inputs available in the keyboard picker while a keyboard is open; they are not intended as the default typing keyboard. This follows [Android’s voice-input subtype behavior](https://developer.android.com/reference/android/view/inputmethod/InputMethodSubtype#isAuxiliary()). Samsung’s microphone button uses its own provider selection: [Samsung documents Samsung voice input and Google Voice Typing](https://www.samsung.com/us/support/answer/ANS10001592/). Registering a voice subtype does not guarantee that Samsung will offer Whisper there. Use the navigation-bar keyboard picker to enter Whisper on Samsung devices.
+
+HTTP itself is unencrypted. “Allow unsecure HTTP” enables HTTP for any configured main or fallback host and displays a warning. API keys still require HTTPS. Use HTTP only over a trusted private network or encrypted VPN; prefer HTTPS. Password/private fields disable dictation. A recording is limited to two minutes.
 
 ## Verification and source
 
@@ -292,6 +300,25 @@ See [the adb doc](https://developer.android.com/tools/logcat) for more info.
 Please [open an issue](https://github.com/j3soon/whisper-to-input/issues) if you have any questions.
 
 ## Developer Notes
+
+New installations start with an empty transcription endpoint. Configure an explicit
+OpenAI-compatible transcription URL before dictating; saved endpoints are preserved.
+
+The Android verification workflow runs only on pull requests targeting `master`
+and manual dispatches (`workflow_dispatch`). Push builds were intentionally removed;
+merges to `master` receive no automatic post-merge CI verification. Dispatch the
+workflow on the merged revision when that verification is needed. Signed distribution
+builds through this workflow require a manual dispatch in
+`jackthelobster/whisper-to-input`.
+
+The workflow also runs a read-only OpenRouter smoke check only on manual dispatches
+in `jackthelobster/whisper-to-input`. Set the repository Actions secret
+`OPENROUTER_API_KEY`. The check authenticates with `GET /api/v1/key` and requires
+`openai/whisper-1` in `GET /api/v1/models?output_modalities=transcription`.
+It sends no audio and does not verify transcription or embed credentials in APKs.
+Pull-request runs skip this secret-backed check, so it requires a manual dispatch
+even when pull-request CI passes.
+
 
 To build and release a newer version, open Android Studio and follow the steps below:
 

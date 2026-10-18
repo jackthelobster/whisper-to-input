@@ -1,8 +1,6 @@
 name: Android verification
 
 on:
-  push:
-    branches: [master, 'feat/**', 'fix/**']
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -25,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
-      - name: Restore release signing key on trusted push only
+      - name: Restore release signing key for trusted manual builds
         if: github.event_name != 'pull_request' && github.repository == 'jackthelobster/whisper-to-input'
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -99,3 +97,14 @@ jobs:
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
             android/app/build/screenshots/
+
+  openrouter:
+    if: github.event_name != 'pull_request' && github.repository == 'jackthelobster/whisper-to-input'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Verify OpenRouter authentication and model discovery
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python3 scripts/check-openrouter.py

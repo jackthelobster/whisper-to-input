@@ -17,7 +17,7 @@
     <string name="microphone">Microphone</string>
     <string name="successfully_set">Settings saved</string>
     <string name="backspace_button_hint">Delete · hold to repeat</string>
-    <string name="btn_previous_ime_hint">Switch To Previous Input Method</string>
+    <string name="btn_previous_ime_hint">Back to typing keyboard</string>
     <string name="generate_logcat">Generate Recent Logcat</string>
 
     <!-- Warning and Error Messages -->
@@ -45,14 +45,14 @@
         <item>@string/settings_option_whisper_asr_webservice</item>
         <item>@string/settings_option_nvidia_nim</item>
     </string-array>
-    <string name="settings_endpoint">Transcription URL</string>
+    <string name="settings_endpoint">URL</string>
     <string name="settings_endpoint_desc">Full URL, including /v1/audio/transcriptions.</string>
     <string name="settings_endpoint_hint"><![CDATA[e.g., http://<host>:<port>/asr]]></string>
     <string name="settings_language_code">Language</string>
-    <string name="settings_language_code_desc">Use en. The default Distil-Whisper model supports English only.</string>
+    <string name="settings_language_code_desc">Language code, such as en or fr. Distil-Whisper distil-large-v3 supports English only.</string>
     <string name="settings_language_code_hint">Enter Language Code (e.g., en, zh)</string>
     <string name="settings_api_key">API key (optional)</string>
-    <string name="settings_api_key_desc">Leave empty for gx10. HTTPS is required when using a key.</string>
+    <string name="settings_api_key_desc">Leave empty if authentication is not required. HTTPS is required when using a key.</string>
     <string name="settings_api_key_hint">Enter OpenAI API Key…</string>
     <string name="settings_model">Model</string>
     <string name="settings_model_desc">The model to use for transcription (e.g., whisper-1).</string>
@@ -92,7 +92,7 @@
     <!-- Compact setup and private dictation UI -->
     <string name="settings_intro">Your voice, your server. Dictate directly into any app.</string>
     <string name="setup_title">Get ready to dictate</string>
-    <string name="setup_description">Allow the microphone, enable this keyboard, then choose it. Audio is sent to your configured server only when you dictate.</string>
+    <string name="setup_description">Allow the microphone and enable Whisper Input. Keep your typing keyboard as default, then select Whisper Input using the keyboard switcher while typing. Audio is sent to your configured server only when you dictate.</string>
     <string name="microphone_needed">Microphone · permission needed</string>
     <string name="microphone_allowed">Microphone · allowed</string>
     <string name="microphone_ready">Microphone ready</string>
@@ -100,13 +100,14 @@
     <string name="keyboard_enabled">Keyboard · enabled</string>
     <string name="enable_keyboard">Enable keyboard</string>
     <string name="choose_keyboard">Choose keyboard</string>
-    <string name="server_title">Transcription server</string>
-    <string name="server_description">OpenAI-compatible audio endpoint. Defaults are configured for gx10 and English dictation.</string>
+    <string name="fallback_server_title">Fallback transcription server</string>
+    <string name="server_title">Main transcription server</string>
+    <string name="server_description">Enter your OpenAI-compatible transcription endpoint to configure dictation.</string>
     <string name="behavior_title">Dictation preferences</string>
-    <string name="allow_insecure">Allow HTTP for gx10</string>
-    <string name="http_warning">HTTP has no transport encryption. Use gx10 only on a trusted local network or through Tailscale. API keys require HTTPS and are never sent over HTTP.</string>
+    <string name="allow_insecure">Allow unsecure HTTP</string>
+    <string name="http_warning">Warning: HTTP sends audio and transcriptions without encryption. This setting applies to any host for both servers. Use only on a trusted network or encrypted VPN. API keys require HTTPS and are never sent over HTTP.</string>
     <string name="test_connection">Test connection</string>
-    <string name="test_connection_description">Checks /v1/models using these fields without saving, recording or uploading audio. This does not verify transcription.</string>
+    <string name="test_connection_description">Checks main /v1/models, then fallback if needed, using these fields without saving, recording or uploading audio. This does not verify transcription.</string>
     <string name="testing_connection">Checking server and model…</string>
     <string name="settings_working">Working…</string>
     <string name="settings_load_failed">Saved settings or API key could not be read. Re-enter settings to recover.</string>
@@ -114,7 +115,7 @@
     <string name="settings_save_failed">Could not save settings. Your changes have not been saved.</string>
     <string name="settings_invalid">These settings are not allowed. Check the endpoint, language and API key.</string>
     <string name="invalid_endpoint">Enter a full URL ending in /v1/audio/transcriptions, without credentials, query or fragment.</string>
-    <string name="http_not_allowed">Use HTTPS, or allow HTTP specifically for gx10.</string>
+    <string name="http_not_allowed">Use HTTPS, or enable Allow unsecure HTTP.</string>
     <string name="http_key_not_allowed">Remove the API key or switch to HTTPS. Keys cannot be sent over HTTP.</string>
     <string name="invalid_model">Enter a model ID without control characters.</string>
     <string name="invalid_language">Enter a language code such as en.</string>
@@ -130,7 +131,22 @@
     <string name="connection_http_error">HTTP %1$d · server returned an error. No audio was sent.</string>
     <string name="system_screen_unavailable">This system screen could not be opened.</string>
     <string name="retry">Retry</string>
-    <string name="keyboard_ready">Ready</string>
+    <string name="keyboard_ready">Ready.</string>
+    <string name="keyboard_ready_fallback">Ready. Using the fallback endpoint.</string>
+    <string name="endpoint_unverified">Model unverified. Dictation available.</string>
+    <string name="endpoint_unverified_fallback">Fallback model unverified. Dictation available.</string>
+    <string name="endpoint_unverified_hint">Model discovery could not verify this model. Tap the microphone to try transcription.</string>
+    <string name="endpoint_unreachable">Cannot reach the server.</string>
+    <string name="endpoint_http_error">Server returned HTTP %1$d.</string>
+    <string name="endpoint_model_missing">Connected, but model “%1$s” is not on the server.</string>
+    <string name="endpoint_invalid_response">Connected, but the server returned an invalid model list.</string>
+    <string name="endpoint_both_failed">Primary: %1$s Fallback: %2$s</string>
+    <string name="endpoint_unavailable">Endpoint(s) unavailable</string>
+    <string name="endpoint_probe_timeout">Endpoint probe timeout</string>
+    <string name="endpoint_unavailable_hint">Tap refresh to check both endpoints.</string>
+    <string name="settings_fallback_endpoint">Fallback URL</string>
+    <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Checks prefer main and repeat every 30–60 seconds while an endpoint is usable. Failed checks retry after roughly 10, 20 and 40 seconds; a timeout with no usable endpoint requires manual refresh. Leave the URL empty to disable fallback.</string>
+    <string name="settings_fallback_api_key">API key (optional)</string>
     <string name="keyboard_ready_hint">Tap the microphone to dictate</string>
     <string name="keyboard_recording_hint">Tap stop to transcribe</string>
     <string name="keyboard_transcribing_hint">Waiting for your server · cancel anytime</string>
@@ -144,4 +160,9 @@
     <string name="enter_key">Enter</string>
     <string name="transcribe_enter">Stop recording and transcribe without submitting</string>
     <string name="transcribe_space">Stop recording, transcribe and add a space</string>
+    <string name="settings_show_shift_enter">Show Shift+Enter key</string>
+    <string name="settings_show_shift_enter_desc">Display Shift+Enter to the left of a shorter spacebar.</string>
+    <string name="shift_enter_key">Shift+Enter</string>
+    <string name="shift_key_label">SHIFT</string>
+    <string name="refresh_endpoints">Refresh endpoint connections</string>
 </resources>

@@ -19,7 +19,6 @@
 
 package com.example.whispertoinput
 
-import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -41,14 +40,13 @@ class WhisperTranscriber {
     private var currentTranscriptionJob: Job? = null
 
     fun startAsync(
-        context: Context,
+        settings: AppSettings,
         filename: String,
         mediaType: String,
         attachToEnd: String,
         callback: (String?) -> Unit,
         exceptionCallback: (String) -> Unit
     ) {
-        val application = context.applicationContext
         val audio = File(filename)
         synchronized(lifecycleLock) {
             if (!supervisor.isActive) return
@@ -57,7 +55,6 @@ class WhisperTranscriber {
             val job = scope.launch(start = CoroutineStart.LAZY) {
                 val result = try {
                     withContext(Dispatchers.IO) {
-                        val settings = SettingsRepository(application).load()
                         val text = client.transcribe(settings, audio, mediaType)
                         coroutineContext.ensureActive()
                         // HTTP success is not editor insertion success. The service owns deletion

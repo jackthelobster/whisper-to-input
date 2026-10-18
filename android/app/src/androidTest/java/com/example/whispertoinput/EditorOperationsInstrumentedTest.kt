@@ -18,6 +18,23 @@ class EditorOperationsInstrumentedTest {
         instrumentation.runOnMainSync { test(View(instrumentation.targetContext)) }
     }
 
+    @Test fun shiftedEnterSendsPairedShiftedEventsWithoutEditorAction() = onMain { view ->
+        val events = mutableListOf<KeyEvent>()
+        val connection = object : BaseInputConnection(view, true) {
+            override fun performEditorAction(actionCode: Int): Boolean {
+                fail("Shift+Enter must not invoke Send")
+                return false
+            }
+            override fun sendKeyEvent(event: KeyEvent): Boolean {
+                events += event
+                return true
+            }
+        }
+        EditorOperations.shiftEnter(connection)
+        assertEquals(listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP), events.map { it.action })
+        assertTrue(events.all { it.keyCode == KeyEvent.KEYCODE_ENTER && it.isShiftPressed })
+    }
+
     @Test fun rejectedInsertionRetainsAudioUntilSuccessfulRetry() = onMain { view ->
         val audio = java.io.File.createTempFile("insertion-retry-", ".m4a", view.context.cacheDir)
         audio.writeText("test-only-audio")
