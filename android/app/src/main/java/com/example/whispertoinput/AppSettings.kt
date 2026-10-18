@@ -21,6 +21,7 @@ data class AppSettings(
 
     companion object {
         const val DEFAULT_ENDPOINT = ""
-        const val DEFAULT_MODEL = "distil-whisper/distil-large-v3"
+        const val DEFAULT_MODEL = ""
+        const val ENGLISH_ONLY_MODEL = "distil-whisper/distil-large-v3"
     }
 }

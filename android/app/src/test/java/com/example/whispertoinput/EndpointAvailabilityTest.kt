@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class EndpointAvailabilityTest {
-    private val settings = AppSettings(
+    private val settings = AppSettings(model = "whisper-1",
         endpoint = "https://main.example/v1/audio/transcriptions", apiKey = "main-secret",
         fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions", fallbackApiKey = "fallback-secret",
         fallbackModel = "whisper-1", fallbackLanguage = "fr"
@@ -150,9 +150,9 @@ class EndpointAvailabilityTest {
         .dns(object : Dns {
             override fun lookup(hostname: String) = listOf(InetAddress.getByName("127.0.0.1"))
         }).proxy(Proxy.NO_PROXY).build().also { clients += it }
-    private fun settings(server: MockWebServer) = AppSettings(endpoint = server.url("/prefix/v1/audio/transcriptions")
+    private fun settings(server: MockWebServer) = AppSettings(model = "whisper-1", endpoint = server.url("/prefix/v1/audio/transcriptions")
         .newBuilder().host("gx10").build().toString(), allowInsecure = true)
-    private fun models() = MockResponse().setBody("{\"data\":[{\"id\":\"${AppSettings.DEFAULT_MODEL}\"}]}")
+    private fun models() = MockResponse().setBody("{\"data\":[{\"id\":\"whisper-1\"}]}")
 
     @Test fun probeUsesModelsWithoutAudioAndPreservesPathPrefix() = runBlocking {
         val server = server()
@@ -186,7 +186,7 @@ class EndpointAvailabilityTest {
             MockResponse().setResponseCode(404), MockResponse().setResponseCode(405),
             MockResponse().setBody("{}"), MockResponse().setBody("invalid json"),
             MockResponse().setBody("""{"data":[{"id":"alias"}]}"""),
-            MockResponse().setBody("""{"padding":"${"x".repeat(70 * 1024)}","data":[{"id":"${AppSettings.DEFAULT_MODEL}"}]}""")
+            MockResponse().setBody("""{"padding":"${"x".repeat(70 * 1024)}","data":[{"id":"whisper-1"}]}""")
         )) {
             server.enqueue(response)
             val result = probe.check(settings(server))
@@ -230,7 +230,7 @@ class EndpointAvailabilityTest {
         server.enqueue(MockResponse().setResponseCode(401))
         assertEquals(ProbeResult.HttpError(401), probe.check(settings(server)))
         server.enqueue(MockResponse().setBody("{\"data\":[]}"))
-        assertEquals(ProbeResult.ModelMissing(AppSettings.DEFAULT_MODEL), probe.check(settings(server)))
+        assertEquals(ProbeResult.ModelMissing("whisper-1"), probe.check(settings(server)))
         server.enqueue(MockResponse().setBody("invalid json"))
         assertEquals(ProbeResult.InvalidResponse, probe.check(settings(server)))
         val target = settings(server)

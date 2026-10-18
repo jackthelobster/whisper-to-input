@@ -49,7 +49,7 @@
     <string name="settings_endpoint_desc">Full URL, including /v1/audio/transcriptions.</string>
     <string name="settings_endpoint_hint"><![CDATA[e.g., http://<host>:<port>/asr]]></string>
     <string name="settings_language_code">Language</string>
-    <string name="settings_language_code_desc">Language code, such as en or fr. The default Distil-Whisper model supports English only.</string>
+    <string name="settings_language_code_desc">Language code, such as en or fr. Distil-Whisper distil-large-v3 supports English only.</string>
     <string name="settings_language_code_hint">Enter Language Code (e.g., en, zh)</string>
     <string name="settings_api_key">API key (optional)</string>
     <string name="settings_api_key_desc">Leave empty if authentication is not required. HTTPS is required when using a key.</string>

@@ -174,7 +174,7 @@ class ExampleInstrumentedTest {
         val secret = "instrumentation-only-placeholder-secret-7341"
         try {
             val fallbackSecret = "instrumentation-only-fallback-secret-9274"
-            repository.save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions", apiKey = secret,
+            repository.save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = secret,
                 fallbackEndpoint = "https://fallback.example.com/v1/audio/transcriptions",
                 fallbackApiKey = fallbackSecret, allowInsecure = false))
             assertEquals(fallbackSecret, repository.load().fallbackApiKey)
@@ -187,12 +187,12 @@ class ExampleInstrumentedTest {
                 assertFalse("Plaintext fallback key found in ${it.name}", contents.contains(fallbackSecret))
             }
         } finally {
-            repository.save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions"))
+            repository.save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = "instrumentation-only-openrouter-key"))
         }
     }
 
     @Test fun settingsAndKeyboardRenderLightAndDarkAtS10eWidth() {
-        runBlocking { SettingsRepository.get(context).save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions")) }
+        runBlocking { SettingsRepository.get(context).save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = "instrumentation-only-openrouter-key")) }
         for ((mode, label) in listOf(AppCompatDelegate.MODE_NIGHT_NO to "light", AppCompatDelegate.MODE_NIGHT_YES to "dark")) {
             InstrumentationRegistry.getInstrumentation().runOnMainSync { AppCompatDelegate.setDefaultNightMode(mode) }
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -200,12 +200,14 @@ class ExampleInstrumentedTest {
                 var loaded = false
                 while (!loaded && android.os.SystemClock.elapsedRealtime() < deadline) {
                     scenario.onActivity { activity ->
-                        loaded = editFields(activity.findViewById(android.R.id.content)).any { it.text.toString() == "https://example.com/v1/audio/transcriptions" }
+                        loaded = editFields(activity.findViewById(android.R.id.content)).any { it.text.toString() == "https://openrouter.ai/api/v1/audio/transcriptions" }
                     }
                     if (!loaded) android.os.SystemClock.sleep(50)
                 }
                 assertTrue("Settings did not load", loaded)
                 scenario.onActivity { activity ->
+                    assertEquals("openai/whisper-1", activity.findViewById<EditText>(R.id.field_model).text.toString())
+                    assertEquals("instrumentation-only-openrouter-key", activity.findViewById<EditText>(R.id.field_api_key).text.toString())
                     assertTrue("Settings screen must protect secrets from screenshots", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                     capture(activity.findViewById(android.R.id.content), activity.getExternalFilesDir(null)!!, "settings-$label")
                     val keyboard = WhisperKeyboard()
@@ -272,7 +274,7 @@ class ExampleInstrumentedTest {
     }
 
     @Test fun actualInputMethodStartsAndBlocksPasswordField() {
-        runBlocking { SettingsRepository.get(context).save(AppSettings(endpoint = "https://example.com/v1/audio/transcriptions")) }
+        runBlocking { SettingsRepository.get(context).save(AppSettings(model = "openai/whisper-1", endpoint = "https://openrouter.ai/api/v1/audio/transcriptions", apiKey = "instrumentation-only-openrouter-key")) }
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val serviceInfo = requireNotNull(automation.serviceInfo)
         serviceInfo.flags = serviceInfo.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or

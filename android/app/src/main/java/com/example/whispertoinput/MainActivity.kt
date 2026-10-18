@@ -234,7 +234,7 @@ class MainActivity : AppCompatActivity() {
                     R.id.input_fallback_model to R.string.invalid_model
                 !settings.fallbackLanguage.matches(Regex("[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?")) ->
                     R.id.input_fallback_language to R.string.invalid_language
-                settings.fallbackModel == SettingsRepository.DEFAULT_MODEL && settings.fallbackLanguage != "en" ->
+                settings.fallbackModel == AppSettings.ENGLISH_ONLY_MODEL && settings.fallbackLanguage != "en" ->
                     R.id.input_fallback_language to R.string.english_model_only
                 else -> null
             }
@@ -260,7 +260,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.input_model to R.string.invalid_model
             !settings.language.matches(Regex("[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?")) ->
                 R.id.input_language to R.string.invalid_language
-            settings.model == SettingsRepository.DEFAULT_MODEL && settings.language != "en" ->
+            settings.model == AppSettings.ENGLISH_ONLY_MODEL && settings.language != "en" ->
                 R.id.input_language to R.string.english_model_only
             settings.apiKey.length > 4096 || settings.apiKey.any { it.code !in 33..126 } ->
                 R.id.input_api_key to R.string.invalid_api_key

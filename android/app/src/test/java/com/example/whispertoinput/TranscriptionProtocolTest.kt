@@ -10,7 +10,7 @@ import org.junit.rules.TemporaryFolder
 class TranscriptionProtocolTest {
     @get:Rule val temporary = TemporaryFolder()
 
-    private fun request(settings: AppSettings = AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true)) = TranscriptionProtocol.buildRequest(
+    private fun request(settings: AppSettings = AppSettings(model = "whisper-1", endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true)) = TranscriptionProtocol.buildRequest(
         settings, temporary.newFile().apply { writeBytes(byteArrayOf(1, 2, 3)) }, "audio/mp4"
     )
 
@@ -30,7 +30,7 @@ class TranscriptionProtocolTest {
         val wire = buffer.readUtf8()
         assertTrue(wire.contains("name=\"file\"; filename=\"audio.m4a\""))
         assertTrue(wire.contains("name=\"model\""))
-        assertTrue(wire.contains("\r\n\r\n${AppSettings.DEFAULT_MODEL}\r\n"))
+        assertTrue(wire.contains("\r\n\r\nwhisper-1\r\n"))
         assertTrue(wire.contains("name=\"language\""))
         assertTrue(wire.contains("\r\n\r\nen\r\n"))
         assertTrue(wire.contains("name=\"response_format\""))
@@ -40,19 +40,19 @@ class TranscriptionProtocolTest {
 
     @Test fun httpsHasOptionalAuthorizationAndPreservesOnlyConfiguredQuery() {
         val endpoint = "https://example.test/transcribe?tenant=a%20b&tenant=c"
-        val request = request(AppSettings(endpoint = endpoint, apiKey = "unit-test-token"))
+        val request = request(AppSettings(model = "whisper-1", endpoint = endpoint, apiKey = "unit-test-token"))
         assertEquals("Bearer unit-test-token", request.header("Authorization"))
         assertEquals(endpoint, request.url.toString())
         assertEquals(2, request.url.querySize)
         assertNull(request.url.queryParameter("encode"))
         assertNull(request.url.queryParameter("language"))
         assertNull(request.url.queryParameter("task"))
-        assertNull(request(AppSettings(endpoint = "https://example.test/transcribe")).header("Authorization"))
+        assertNull(request(AppSettings(model = "whisper-1", endpoint = "https://example.test/transcribe")).header("Authorization"))
     }
 
     @Test fun blankLanguageOmitsLanguageForAutomaticDetection() {
         val buffer = Buffer()
-        request(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", language = "", allowInsecure = true)).body!!.writeTo(buffer)
+        request(AppSettings(model = "whisper-1", endpoint = "http://gx10:8020/v1/audio/transcriptions", language = "", allowInsecure = true)).body!!.writeTo(buffer)
         assertFalse(buffer.readUtf8().contains("name=\"language\""))
     }
 
@@ -77,16 +77,16 @@ class TranscriptionProtocolTest {
     @Test fun invalidRecordingAndModelAreRejectedBeforeNetworking() {
         val empty = temporary.newFile()
         assertThrows(TranscriptionException::class.java) {
-            TranscriptionProtocol.buildRequest(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true), empty, "audio/mp4")
+            TranscriptionProtocol.buildRequest(AppSettings(model = "whisper-1", endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true), empty, "audio/mp4")
         }
         assertThrows(TranscriptionException::class.java) { request(AppSettings(endpoint = "https://example.test/transcribe", model = "")) }
         assertThrows(TranscriptionException::class.java) {
-            TranscriptionProtocol.buildRequest(AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true), empty.apply { writeText("audio") }, "text/plain")
+            TranscriptionProtocol.buildRequest(AppSettings(model = "whisper-1", endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true), empty.apply { writeText("audio") }, "text/plain")
         }
     }
 
     @Test fun invalidFallbackModelAndLanguageAreRejected() {
-        val settings = AppSettings(endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true, fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions")
+        val settings = AppSettings(model = "whisper-1", endpoint = "http://gx10:8020/v1/audio/transcriptions", allowInsecure = true, fallbackEndpoint = "https://fallback.example/v1/audio/transcriptions")
         assertThrows(TranscriptionException::class.java) {
             TranscriptionProtocol.validateSettings(settings.copy(fallbackModel = ""))
         }
@@ -98,7 +98,7 @@ class TranscriptionProtocolTest {
     }
 
     @Test fun settingsToStringRedactsBothKeyAndEndpoint() {
-        val settings = AppSettings(endpoint = "https://example.test/?secret=query", apiKey = "unit-test-token")
+        val settings = AppSettings(model = "whisper-1", endpoint = "https://example.test/?secret=query", apiKey = "unit-test-token")
         assertFalse(settings.toString().contains("unit-test-token"))
         assertFalse(settings.toString().contains("secret=query"))
     }
