@@ -32,8 +32,9 @@ The previously delivered `v0.5.0-andrew.1` APK came from successful push run `37
 
 - Inspect the working tree first. CI builds the selected remote revision, not local uncommitted changes. Do not claim that a CI APK includes changes present only on this phone.
 - Committing, pushing and dispatching a workflow require the user's authorization. Do not do them merely because this document provides commands.
-- The workflow runs on pushes to `master`, `feat/**` and `fix/**`, on pull requests targeting `master`, or through `workflow_dispatch`.
-- A signed distribution APK requires a trusted push or manual dispatch in `jackthelobster/whisper-to-input`. Pull-request builds intentionally do not receive the distribution key and are not the signed delivery path.
+- The workflow runs only on pull requests targeting `master` and through `workflow_dispatch`. Push builds were intentionally removed in `787586c`; merges to `master` receive no automatic post-merge CI verification. To verify the merged revision, obtain authorization and manually dispatch that exact remote revision.
+- A signed distribution APK from this workflow requires a manual dispatch in `jackthelobster/whisper-to-input`. Pull-request builds intentionally do not receive the distribution key and are not the signed delivery path.
+- The secret-backed OpenRouter smoke check (`scripts/check-openrouter.py`) also runs only on manual dispatches in `jackthelobster/whisper-to-input`; passing pull-request CI does not verify it.
 
 After authorization, a manual build can be started from the repository root with the remote branch or tag containing the intended changes:
 
@@ -44,7 +45,7 @@ gh run list --repo jackthelobster/whisper-to-input --workflow android.yml \
   --limit 10 --json databaseId,event,headSha,status,conclusion
 ```
 
-Identify the newly dispatched run by its event and source SHA, not just its position in the list. For an automatic push build, select that push run instead of dispatching a duplicate.
+Identify the newly dispatched run by its `workflow_dispatch` event and source SHA, not just its position in the list. Reuse an existing manual run only if it verifies the intended source SHA; there are no automatic push runs.
 
 ### 2. Build and verify on the Linux runner
 
@@ -54,7 +55,7 @@ The workflow's exact Gradle command, executed from `android/`, is:
 ./gradlew --no-daemon testDebugUnitTest lintRelease assembleRelease assembleDebug assembleDebugAndroidTest
 ```
 
-The existing Gradle signing configuration reads `ANDROID_KEYSTORE_PATH` and `ANDROID_KEYSTORE_PASSWORD`; its PKCS12 key alias is `whisper-dictation`. The trusted CI build restores the existing key from repository secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD`, restricts the temporary file to mode 600, supplies those environment variables and removes the runner key in an `always()` cleanup step. Reuse that identity; do not generate a replacement key or commit/signing-log its contents.
+The existing Gradle signing configuration reads `ANDROID_KEYSTORE_PATH` and `ANDROID_KEYSTORE_PASSWORD`; its PKCS12 key alias is `whisper-dictation`. The trusted manual CI build restores the existing key from repository secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD`, restricts the temporary file to mode 600, supplies those environment variables and removes the runner key in an `always()` cleanup step. Reuse that identity; do not generate a replacement key or commit/signing-log its contents.
 
 The runner verifies the distribution APK with these SDK tools, also from `android/`:
 
@@ -113,7 +114,7 @@ Review the signature/manifest reports, parse the actual JUnit XML for totals/fai
 
 ## Taking app screenshots
 
-For screenshots or a live app preview without GitHub, use the verified Android 12 emulator on `comet` described below. The GitHub Actions workflow above remains available for CI verification. Check the selected emulator/ADB connection before promising captures; a successful native Termux APK build does not provide an emulator. Comet can build a copy of the current working tree without committing it. CI captures the selected remote commit, so uncommitted UI changes must first reach that revision with authorization for any commit/push/dispatch. For CI, follow sections 1–4 above and reuse an automatic push run rather than dispatching a duplicate.
+For screenshots or a live app preview without GitHub, use the verified Android 12 emulator on `comet` described below. The GitHub Actions workflow above remains available for CI verification. Check the selected emulator/ADB connection before promising captures; a successful native Termux APK build does not provide an emulator. Comet can build a copy of the current working tree without committing it. CI captures the selected remote commit, so uncommitted UI changes must first reach that revision with authorization for any commit/push/dispatch. For CI, follow sections 1–4 above: reuse a manual dispatch for the intended source SHA if one exists, or obtain authorization to dispatch it. Pushing alone does not start a build.
 
 The screenshot harness is `settingsAndKeyboardRenderLightAndDarkAtS10eWidth` in `android/app/src/androidTest/java/com/example/whispertoinput/ExampleInstrumentedTest.kt`. It renders settings and keyboard views on the API 31 emulator in light and dark mode, using dummy data. Its `capture()` helper calls `view.draw(Canvas(bitmap))`; these PNGs show app views, not full-device screenshots with system bars or proof of a live microphone/server interaction. Keep production `FLAG_SECURE` enabled and do not add storage permissions or capture real credentials.
 
