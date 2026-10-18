@@ -215,6 +215,7 @@ class ExampleInstrumentedTest {
                     activity.setContentView(view)
                     view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
                     view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                    keyboard.setEndpointStatus(EndpointStatus.Ready)
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-$label")
                     keyboard.setShowShiftEnter(true)
                     view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))

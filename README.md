@@ -1,340 +1,140 @@
-# Whisper To Input — Andrew’s secure dictation fork
+# Whisper To Input
 
-This fork targets a Samsung Galaxy S10e running Android 12. It provides a native Material 3 day/night settings screen and a compact voice-input keyboard, with security and lifecycle fixes.
+**Your voice, your server. Dictate into Android apps with a Whisper-compatible transcription service.**
 
-## Your distil-whisper configuration
+Whisper To Input is a compact voice keyboard for Android. Switch to it from your usual keyboard, speak, and insert the transcription into the active text field. Choose your own server, configure an optional fallback, and keep control over where your recordings go.
 
-| Setting | Value |
-|---|---|
-| Endpoint | http://gx10:8020/v1/audio/transcriptions |
-| Model | distil-whisper/distil-large-v3 |
-| Language | en |
-| API key | Leave blank for the current server |
-| Allow unsecure HTTP | Enabled; applies to any configured host |
-| Auto-record | Off by default |
+This is the maintained [jackthelobster fork](https://github.com/jackthelobster/whisper-to-input) of [j3soon/whisper-to-input](https://github.com/j3soon/whisper-to-input), with a redesigned interface, endpoint failover, and stronger credential and recording handling.
 
-Only English is supported by this particular distil-whisper server. Other OpenAI-compatible transcription servers can be configured using HTTPS. This fork focuses on that multipart API; the upstream ASR-specific route, NIM OGG mode and Chinese conversion settings are not retained.
+**[Download v0.6.0 APK](https://github.com/jackthelobster/whisper-to-input/releases/download/v0.6.0/whisper-to-input-v0.6.0.apk)** · [Release notes and checksums](https://github.com/jackthelobster/whisper-to-input/releases/tag/v0.6.0) · [Report an issue](https://github.com/jackthelobster/whisper-to-input/issues)
 
-## Install and use this fork
+Requires **Android 7.0 or newer**, microphone permission, and a reachable OpenAI-compatible transcription server. Speech recognition runs on your configured server; no model is bundled with the app. Hosted services may require an account and charge for usage.
 
-1. Install the fork’s signed APK, not the upstream release linked further below. The fork uses a separate application ID, com.jackthelobster.whispertoinput, so it can coexist with the original.
-2. Open the app and grant microphone permission using its setup button. No notification or storage permission is needed.
-3. Enable Whisper Input using the app’s Enable button. Samsung also exposes this under Settings → General management → Keyboard list and default. Keep Samsung Keyboard (or your usual typing keyboard) as the default. With a text field and the typing keyboard open, use the navigation bar’s keyboard button to select Whisper Input.
-4. Keep the pre-filled settings above, use Test connection, and save any changes. The S10e must be able to resolve gx10 and reach port 8020 through your local network or VPN.
-5. In an ordinary text field, switch to Whisper Input. Tap the microphone, speak English, then tap Stop to transcribe and insert text. Cancel discards audio. Failed uploads can be retried only while the same field remains active. Switching fields or hiding the keyboard cancels work and deletes the recording.
+## A voice keyboard that fits your workflow
 
-The app checks the configured server on launch and whenever voice input opens, then every 30–60 seconds (jittered) while an endpoint is usable and the voice keyboard is visible, including during recording and transcription. When no endpoint is usable, retries back off at roughly 10, 20 and 40 seconds with downward jitter; a probe timeout pauses automatic checks until an explicit refresh. It shows “Ready.” only after `/v1/models` responds successfully and lists the selected model. A missing `/models` endpoint (HTTP 404/405), an unreadable model list (including a list exceeding the diagnostic size limit), or a list without the configured model leaves dictation available with a “Model unverified” status. Manual recording and auto-record can still attempt transcription. Failed connections, authentication, redirects and other HTTP errors show an unavailable status. These checks send no audio and do not prove that transcription will succeed.
+- **Dictate where you type.** Insert recognized speech directly into ordinary text fields, then return to your typing keyboard with the back arrow.
+- **Bring your own server.** Set the full transcription URL, model, language, and optional API key. Use a hosted API or a compatible self-hosted service.
+- **Keep a fallback ready.** Main and fallback servers have independent models, languages, and credentials. Availability checks prefer the main server and switch back when it recovers.
+- **See what is happening.** Light and dark themes show connection status, listening, transcription, and retry controls.
+- **Edit without switching.** Space, repeat-delete, Enter, and an optional Shift+Enter key sit alongside the microphone.
+- **Tune the handoff.** Optionally record when the voice keyboard opens, add a trailing space, or return to the previous keyboard after transcription.
 
-Settings group the main and fallback transcription servers separately, each with its own URL, model, language and optional API key. Leave the fallback URL empty to disable it. Existing fallback configurations initially inherit the previously shared model and language. Checks probe main and fallback concurrently, preferring a verified main, then a verified fallback, then an unverified main or fallback. When fallback passes, the keyboard shows “Ready. Using the fallback endpoint.” and sends subsequent dictation to fallback. The next check always retries main and switches back when it is available. Checks stop when the keyboard hides or the input session ends. An upload already in progress finishes on its original endpoint.
+## Screenshots
 
-The top-left back arrow returns to the previous typing keyboard. It is available while listening, transcribing, idle or in a protected field; leaving cancels unfinished dictation. If Android has no previous keyboard, the arrow opens the keyboard picker. Enable “Return to previous keyboard” in settings to return automatically after successful transcription.
+<table>
+  <tr>
+    <th>Settings · light</th>
+    <th>Settings · dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/v0.6.0/settings-light.png" alt="Light theme settings showing microphone and keyboard setup" width="320"></td>
+    <td><img src="docs/images/v0.6.0/settings-dark.png" alt="Dark theme settings showing microphone and keyboard setup" width="320"></td>
+  </tr>
+  <tr>
+    <th>Ready to dictate</th>
+    <th>Listening</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/v0.6.0/keyboard-light.png" alt="Compact voice keyboard ready to dictate in light theme" width="320"></td>
+    <td><img src="docs/images/v0.6.0/keyboard-listening-dark.png" alt="Dark theme voice keyboard listening with stop and cancel controls" width="320"></td>
+  </tr>
+  <tr>
+    <th>Retry a recording</th>
+    <th>Optional Shift+Enter</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/v0.6.0/keyboard-retry-light.png" alt="Light theme transcription error with a visible retry button" width="320"></td>
+    <td><img src="docs/images/v0.6.0/keyboard-shift-enter-dark.png" alt="Dark theme voice keyboard with Shift+Enter beside a shorter spacebar" width="320"></td>
+  </tr>
+</table>
 
-Whisper Input registers as an auxiliary voice input rather than a typing keyboard. Android makes auxiliary inputs available in the keyboard picker while a keyboard is open; they are not intended as the default typing keyboard. This follows [Android’s voice-input subtype behavior](https://developer.android.com/reference/android/view/inputmethod/InputMethodSubtype#isAuxiliary()). Samsung’s microphone button uses its own provider selection: [Samsung documents Samsung voice input and Google Voice Typing](https://www.samsung.com/us/support/answer/ANS10001592/). Registering a voice subtype does not guarantee that Samsung will offer Whisper there. Use the navigation-bar keyboard picker to enter Whisper on Samsung devices.
+Captured on comet's Android 12 AOSP emulator at 1080 × 2280 pixels and 480 dpi. These are app views rendered by the instrumentation harness with dummy settings and simulated keyboard states. They do not show a live transcription session. [Capture details and all ten images](docs/images/v0.6.0/README.md).
 
-HTTP itself is unencrypted. “Allow unsecure HTTP” enables HTTP for any configured main or fallback host and displays a warning. API keys still require HTTPS. Use HTTP only over a trusted private network or encrypted VPN; prefer HTTPS. Password/private fields disable dictation. A recording is limited to two minutes.
+## Install and start dictating
 
-## Verification and source
+1. [Download the signed v0.6.0 APK](https://github.com/jackthelobster/whisper-to-input/releases/download/v0.6.0/whisper-to-input-v0.6.0.apk), open it on your Android device, and allow installation from that source if Android asks.
+2. Open **Whisper To Input**. Use **Allow microphone**, then **Enable keyboard** to enable **Whisper Input** in Android's input settings.
+3. Keep your usual typing keyboard as the default. Whisper Input is a temporary voice input selected while a text field is open.
+4. Enter your main server's full transcription URL, model, language, and optional API key. New installations start with an empty URL and model. Use **Test connection**, then **Save settings**.
+5. Open a text field in another app. With your typing keyboard visible, use Android's keyboard switcher to choose **Whisper Input**.
+6. Tap the microphone, speak, then tap Stop. The app uploads the recording to the selected server and inserts the returned text. Tap the back arrow to resume typing.
 
-- [Security and bug review](docs/SECURITY_REVIEW.md).
-- [Automated Android build and verification](../../actions).
-- Unit tests cover endpoint policy, multipart/parsing, HTTP cancellation/errors, credential migration, audio ownership and editor policy.
-- Android 12 instrumentation covers permission/network policy, actual Keystore round-trip, UI rendering and protected-field microphone controls.
-- GitHub Actions builds a non-debug release APK with a persistent private signing key and verifies its signature. Signed APKs and reports are provided as artifacts; the signing key is never committed.
-- The GPLv3 license and original contributor credits are preserved.
+On Samsung devices, keyboard settings are usually under **Settings → General management → Keyboard list and default**. Use the navigation bar's keyboard switcher; Samsung's microphone button may only offer Samsung or Google voice input.
 
-The following is the original upstream documentation, retained for history. Its screenshots, release downloads, backend options, permission requirements and keyboard behavior do not describe this fork.
+The fork uses application ID `com.jackthelobster.whispertoinput` and can coexist with upstream. The v0.6.0 distribution APK uses this fork's existing release signing identity, allowing an update over its earlier signed release without uninstalling. Debug builds use a different key. If Android reports a signature conflict, check which build is installed before removing anything; uninstalling deletes app data.
 
----
+## Connect a transcription server
 
-# Original upstream documentation
+The app sends an OpenAI-compatible multipart request with `file`, `model`, `response_format=json`, and `language` when supplied. It accepts JSON containing a `text` string or a plain-text transcription. Supported languages depend on your server and model; leave Language blank for detection when the server supports it.
 
-Whisper To Input, also known by its Mandarin name 輕聲細語輸入法, is an Android keyboard that performs speech-to-text (STT/ASR) with OpenAI Whisper and input the recognized text; Supports English, Chinese, Japanese, etc. and even mixed languages and Taiwanese.
+| Setting | Hosted OpenAI example | Self-hosted Distil-Whisper example |
+| --- | --- | --- |
+| URL | `https://api.openai.com/v1/audio/transcriptions` | `https://your-server.example/v1/audio/transcriptions` |
+| Model | `whisper-1` | `distil-whisper/distil-large-v3` |
+| Language | `en`, or blank for detection | `en` (this model is English only) |
+| API key | Your provider's API key | Your server's key, or blank if none is required |
 
-The STT/ASR backend service can be either [OpenAI API](https://platform.openai.com/docs/guides/speech-to-text), [Whisper ASR Webservice](https://github.com/ahmetoner/whisper-asr-webservice), or [NVIDIA NIM](https://build.nvidia.com/openai/whisper-large-v3) (based on [NVIDIA Riva](https://docs.nvidia.com/deeplearning/riva/user-guide/docs/index.html)).
+These are configuration examples, not bundled services. Use the exact model ID and URL supplied by your provider. This fork implements the multipart transcription API; upstream's separate `/asr` backend mode, NIM-specific OGG mode, and Chinese text conversion options are not included.
 
-## Installation
+For a private server that only supports HTTP, enable **Allow unsecure HTTP** explicitly and leave its API key empty. This setting applies to both main and fallback hosts. HTTP exposes audio and responses to the network; use HTTPS whenever possible, or a trusted private network/encrypted VPN. Keys are never sent over HTTP. A hostname must resolve from the Android device itself; `localhost` means the phone, not your server.
 
-1. Download the APK file from [the latest release](https://github.com/j3soon/whisper-to-input/releases/latest) to your phone.
+### Fallback and connection status
 
-2. Locate the APK file in your phone and click it. Click "Install" to install the app.
+Enter a **Fallback transcription server** URL to enable fallback, or leave it empty to disable it. Configure its own model, language, and optional key.
 
-   <img src='docs/images/01-apk-file.jpg' width='200'>
-   <img src='docs/images/02-installing-apk.jpg' width='200'>
+While the voice keyboard is visible, automatic checks probe both servers concurrently and prefer a verified main, then a verified fallback, then an unverified main or fallback. A running upload stays on its original endpoint; these checks select the server for subsequent dictation rather than automatically replaying an upload.
 
-3. An `Unsafe app blocked` warning will pop up. Click `More details` and then click `Install anyway`. Click `Open` to open the app.
+| Status | Meaning and next step |
+| --- | --- |
+| **Ready.** | The server's model list includes your configured model. Tap the microphone. |
+| **Ready. Using the fallback endpoint.** | The fallback is selected. Later checks keep trying the main server. |
+| **Model unverified. Dictation available.** | Model discovery is unsupported, unreadable, or does not list the model. You can still attempt transcription. |
+| **Endpoint(s) unavailable** | Check the URL, network, authentication, and server. Tap refresh to check again. |
+| **Endpoint probe timeout** | No usable endpoint was found before timeout. Tap refresh to resume checks. |
 
-   <img src='docs/images/03-unsafe-app-blocked.jpg' width='200'>
-   <img src='docs/images/04-unsafe-app-install-anyway.jpg' width='200'>
-   <img src='docs/images/05-app-installed.jpg' width='200'>
+Checks normally repeat every 30–60 seconds while an endpoint is usable. Unavailable checks retry at roughly 10, 20, and 40 seconds with jitter. Checks stop when the keyboard hides or the input session ends. **Test connection** checks the settings form without saving it. Neither model discovery nor a successful connection check uploads audio or proves transcription will succeed.
 
-4. Allow the app to record audio and send notifications. These permissions are required for the app to work properly. If you accidentally denied the permissions, you must go to the app settings page to allow them.
+## Keyboard controls
 
-   <img src='docs/images/06-record-audio-permission.jpg' width='200'>
-   <!-- TODO: Add send notification permission screenshot -->
+| Control | What it does |
+| --- | --- |
+| Microphone / Stop | Start recording; stop and send it for transcription. When endpoints are unavailable, the central button refreshes their status. |
+| Cancel | Discard the recording or cancel the active upload. |
+| Retry | Resend retained audio after a failure, while the same input session remains active. |
+| Back arrow | Return to the previous keyboard; open the picker if Android has no previous keyboard. Leaving cancels unfinished dictation. |
+| Settings | Open the app's configuration screen. |
+| Backspace | Delete the selection or previous Unicode code point; hold to repeat. |
+| Space | Insert a space; during recording, stop and transcribe with a trailing space. |
+| Enter | Use the editor's action or insert a newline while idle. During recording, stop and transcribe with a newline without submitting the field. |
+| Shift+Enter | Send Shift+Enter to the editor when enabled in settings; behavior depends on the receiving app. |
 
-5. Go to the app settings page and enter your configuration. You have 2 choices, either using the official OpenAI API with [your API key](https://platform.openai.com/api-keys) or self-host a [Whisper ASR Webservice](https://github.com/ahmetoner/whisper-asr-webservice). For more information, see the [Services](#services) section.
+## Privacy and recording lifecycle
 
-   <img src='docs/images/08-app-settings-page.jpg' width='200'>
+Audio goes to the endpoint you configure, whose own storage and privacy policies apply. Recording begins when you tap the microphone, or when the keyboard opens if you explicitly enable **Record when opened**; that option is off by default. Endpoint checks send no audio.
 
-   Some example configurations:
+API keys are encrypted at rest using Android Keystore. Settings are protected by `FLAG_SECURE`, app backup is disabled, and HTTP redirects are refused. Dictation is disabled for password fields and fields that request no personalized learning; protection depends on the receiving app marking its fields correctly.
 
-   - OpenAI API:
-     ```
-     Speech to Text Backend:  OpenAI API
-     Endpoint:                https://api.openai.com/v1/audio/transcriptions
-     API Key:                 sk-...xxxx
-     Model:                   whisper-1
-     Language Code:
-     ```
-   - Whisper ASR Webservice:
-     ```
-     Speech to Text Backend:  Whisper ASR Webservice
-     Endpoint:                http://<SERVER_IP>:9000/asr
-     API Key:
-     Model:
-     Language Code:
-     ```
-   - NVIDIA NIM:
-     ```
-     Speech to Text Backend:  NVIDIA NIM
-     Endpoint:                http://<SERVER_IP>:9000/v1/audio/transcriptions
-     API Key:
-     Model:
-     Language Code:           multi
-     ```
+Recordings stay in private app storage, are limited to two minutes, and uploads are capped at 25 MiB. Successful insertion deletes the recording. Failed audio can remain available for Retry in the current session. Canceling, hiding the keyboard, or changing input sessions cancels work and removes retained audio. The app requires microphone and network access; it does not require notification or shared-storage permissions.
 
-6. Go to the system settings page and enable the app keyboard. This process may vary depending on your Android version and phone model. The following screenshots are taken on Android 13 of a Asus Zenfone 8.
+See the [security review](docs/SECURITY_REVIEW.md) for implementation details and review scope.
 
-   <img src='docs/images/09-settings.jpg' width='200'>
-   <img src='docs/images/10-settings-system.jpg' width='200'>
-   <img src='docs/images/11-settings-languages-and-input.jpg' width='200'>
-   <img src='docs/images/12-settings-on-screen-keyboard.jpg' width='200'>
-   <img src='docs/images/13-settings-on-screen-keyboard-attention.jpg' width='200'>
-   <img src='docs/images/14-settings-on-screen-keyboard-note.jpg' width='200'>
-   <img src='docs/images/15-settings-on-screen-keyboard-on.jpg' width='200'>
+## Build and verification
 
-7. Open any app that requires text input, such as a browser, and click the input box. Choose the app keyboard by clicking the bottom right button and choosing `Whisper Input`.
-
-   <img src='docs/images/16-duckduckgo.jpg' width='200'>
-   <img src='docs/images/17-choose-input-method.jpg' width='200'>
-   <img src='docs/images/18-app-keyboard.jpg' width='200'>
-
-   > Please note that the keyboard GUI will look slightly different than the screenshots due to the fixes in [#50](https://github.com/j3soon/whisper-to-input/pull/50).
-
-8. Click the microphone button to start recording. After you finish speaking, click the microphone button again. The recognized text will be inputted into the text box.
-
-## Keyboard Usage
-
-<img src='docs/images/keyboard-layout.jpg' width='200'>
-
-- `Microphone Key` in the center: Click to start recording, click again to stop recording, and input the recognized text.
-- `Cancel Key` in the bottom left (Only visible when recording): Click to cancel the current recording.
-- `Backspace Key` in the upper right: Delete the previous character. If you press and hold this key, it will keep deleting characters until you release it.
-- `Enter Key` in the bottom right: Input a newline character. If you press this while recording, it will stop recording and input the recognized text with a trailing newline.
-- `Settings Key` in the upper left: Open the app settings page.
-- `Switch Key` in the upper left: Switch to the previous input method. Note that if there were no previous input method, this key will not do anything.
-
-## Services
-
-Either one of the following service can be used as the STT/ASR backend.
-
-### OpenAI API
-
-Requires an [OpenAI API key](https://platform.openai.com/api-keys).
-
-See the [documentation](https://platform.openai.com/docs/guides/speech-to-text?lang=curl) for more info.
-
-### Whisper ASR Webservice
-
-The most commonly used open-source self-host whisper service. Requires a self-hosted server.
-
-[Whisper ASR Webservice](https://github.com/ahmetoner/whisper-asr-webservice) can be set up as described in [#13](https://github.com/j3soon/whisper-to-input/pull/13).
-
-### NVIDIA NIM (Self-hosted)
-
-NVIDIA's optimized whisper model using TensorRT-LLM. Requires a self-hosted server.
-
-Use the [openai/whisper-large-v3 NIM](https://build.nvidia.com/openai/whisper-large-v3) by following [the deployment guide](https://build.nvidia.com/openai/whisper-large-v3/deploy). After generating a NGC API key, run:
+This is a native Kotlin Android app, built with JDK 17, the checked-in Gradle 8.7 wrapper, Android Gradle Plugin 8.6.1, and SDK 35. Minimum SDK is 24. Run Gradle from `android/` with an installed Android SDK:
 
 ```sh
-export NGC_API_KEY=<PASTE_API_KEY_HERE>
-export LOCAL_NIM_CACHE=~/.cache/nim
-mkdir -p "$LOCAL_NIM_CACHE"
-
-docker run -it --rm --name=riva-asr \
-   --runtime=nvidia \
-   --gpus '"device=0"' \
-   --shm-size=8GB \
-   -e NGC_API_KEY \
-   -e NIM_HTTP_API_PORT=9000 \
-   -e NIM_GRPC_API_PORT=50051 \
-   -v "$LOCAL_NIM_CACHE:/opt/nim/.cache" \
-   -u $(id -u) \
-   -p 9000:9000 \
-   -p 50051:50051 \
-   -e NIM_TAGS_SELECTOR=name=whisper-large-v3 \
-   nvcr.io/nim/nvidia/riva-asr:1.3.0
+cd android
+./gradlew --no-daemon testDebugUnitTest lintRelease assembleRelease assembleDebug assembleDebugAndroidTest
 ```
 
-and wait for a while. It should show the following when launched successfully:
+A signed release requires the existing distribution key through `ANDROID_KEYSTORE_PATH` and `ANDROID_KEYSTORE_PASSWORD`; without those variables the release output is unsigned. Never commit signing material. The release variant enables code minification and resource shrinking.
 
-```
-INFO:uvicorn.error:Uvicorn running on http://0.0.0.0:9000 (Press CTRL+C to quit)
-```
+[Android verification](https://github.com/jackthelobster/whisper-to-input/actions/workflows/android.yml) runs on pull requests to `master` and manual dispatches, not pushes. Trusted manual dispatches produce signed distribution APKs and run the secret-backed OpenRouter authentication/model-discovery smoke check. The Android 12 CI emulator runs debug instrumentation. Unit tests cover endpoint selection, network policy, protocol parsing, cancellation, credential migration, audio ownership, and editor behavior.
 
-Perform a health check:
+See [AGENTS.md](AGENTS.md) for reproducible GitHub, comet, and native Termux build instructions. The release includes checksums, signature and manifest reports, source, and verification evidence. Emulator rendering and debug instrumentation do not establish physical-device acceptance or live microphone/server transcription behavior.
 
-```sh
-curl -X 'GET' 'http://localhost:9000/v1/health/ready'
-```
+## License and credits
 
-this should show:
+Licensed under [GPL-3.0-or-later](android/LICENSE). Release source is available from the matching Git tag and the source archive on the release page.
 
-```
-{"ready":true}
-```
-
-Download a sample audio:
-
-```sh
-# MP3 will not work, use wav instead.
-wget https://github.com/audio-samples/audio-samples.github.io/raw/refs/heads/master/samples/wav/ted_speakers/BillGates/sample-0.wav
-```
-
-Then test it:
-
-```sh
-curl --request POST \
-  --url http://localhost:9000/v1/audio/transcriptions \
-  --header 'Content-Type: multipart/form-data' \
-  --form file=@./sample-0.wav \
-  --form language=multi \
-  --form response_format=text
-```
-
-this should show:
-
-```
-"A cramp is no small danger on a swim. "
-```
-
-The following Python package is used in the official guide, but isn't required. We still include these instructions here for reference:
-
-```sh
-sudo apt-get install python3-pip
-pip install nvidia-riva-client
-git clone https://github.com/nvidia-riva/python-clients.git
-```
-
-and
-
-```sh
-python3 python-clients/scripts/asr/transcribe_file_offline.py --server 0.0.0.0:50051 --input-file ./sample-0.wav --language-code multi
-```
-
-will show something like:
-
-```
-{
-  "results": [
-    {
-      "alternatives": [
-        {
-          "transcript": "a cramp is no small danger on a swim ",
-          "confidence": 0.0,
-          "words": [],
-          "languageCode": []
-        }
-      ],
-      "channelTag": 1,
-      "audioProcessed": 2.84625
-    }
-  ],
-  "id": {
-    "value": "dc98a7d8-487a-4825-bf3c-6f9621914246"
-  }
-}
-Final transcript: a cramp is no small danger on a swim 
-```
-
-and
-
-```sh
-python3 python-clients/scripts/asr/transcribe_file_offline.py --list-models
-```
-
-will show:
-
-```
-Available ASR models
-{'en,zh,de,es,ru,ko,fr,ja,pt,tr,pl,ca,nl,ar,sv,it,id,hi,fi,vi,he,uk,el,ms,cs,ro,da,hu,ta,no,th,ur,hr,bg,lt,la,mi,ml,cy,sk,te,fa,lv,bn,sr,az,sl,kn,et,mk,br,eu,is,hy,ne,mn,bs,kk,sq,sw,gl,mr,pa,si,km,sn,yo,so,af,oc,ka,be,tg,sd,gu,am,yi,lo,uz,fo,ht,ps,tk,nn,mt,sa,lb,my,bo,tl,mg,as,tt,haw,ln,ha,ba,jw,su,yue,multi': [{'model': ['whisper-large-v3-multi-asr-offline-asr-bls-ensemble']}]}
-```
-
-## Debugging
-
-All current builds in the [release page](https://github.com/j3soon/whisper-to-input/releases) are debug builds. To view the logs, enable [USB debugging](https://developer.android.com/studio/debug/dev-options), connect your phone to a PC, and use `adb logcat` to view the logs. If you have a local Android Studio install, launch the [ADB tool](https://developer.android.com/tools/adb), otherwise, you may want to consider installing a minimal standalone ADB from [Minimal ADB and Fastboot](https://xdaforums.com/t/tool-minimal-adb-and-fastboot-2-9-18.2317790/).
-
-Below are some useful `adb logcat` commands:
-
-```sh
-adb devices
-adb logcat *:E
-adb logcat *:W
-adb logcat *:I
-adb logcat *:D
-adb logcat *:V
-```
-
-See [the adb doc](https://developer.android.com/tools/logcat) for more info.
-
-## Permission Description
-
-- `RECORD_AUDIO`: Required for the app to record audio for voice input.
-- `POST_NOTIFICATIONS`: Required for the app to show toasts in the background if any error occurs.
-
-## FAQ and Known Issues
-
-- Sometimes the keyboard will silently fail, please see issue [#17](https://github.com/j3soon/whisper-to-input/issues/17) for further information.
-- Taiwanese (or Hokkien) transcription seems to work quiet well, although [not declared officially](https://github.com/openai/whisper) (thanks [@ijsun](https://github.com/ijsun) for discovering this). To support Taiwanese transcription, do not set the `Language Code` in the settings page.
-
-Please [open an issue](https://github.com/j3soon/whisper-to-input/issues) if you have any questions.
-
-## Developer Notes
-
-New installations start with an empty transcription endpoint. Configure an explicit
-OpenAI-compatible transcription URL before dictating; saved endpoints are preserved.
-
-The Android verification workflow runs only on pull requests targeting `master`
-and manual dispatches (`workflow_dispatch`). Push builds were intentionally removed;
-merges to `master` receive no automatic post-merge CI verification. Dispatch the
-workflow on the merged revision when that verification is needed. Signed distribution
-builds through this workflow require a manual dispatch in
-`jackthelobster/whisper-to-input`.
-
-The workflow also runs a read-only OpenRouter smoke check only on manual dispatches
-in `jackthelobster/whisper-to-input`. Set the repository Actions secret
-`OPENROUTER_API_KEY`. The check authenticates with `GET /api/v1/key` and requires
-`openai/whisper-1` in `GET /api/v1/models?output_modalities=transcription`.
-It sends no audio and does not verify transcription or embed credentials in APKs.
-Pull-request runs skip this secret-backed check, so it requires a manual dispatch
-even when pull-request CI passes.
-
-
-To build and release a newer version, open Android Studio and follow the steps below:
-
-1. Bump the version code and version name.
-2. Retrieve signing keystore and its password from [Johnson](https://github.com/j3soon).
-3. Menu: `Build > Generate Signed App Bundle / APK...`
-4. Select `APK`, and fill in the signing keystore path and password, and select `Debug` in the next step to build.
-5. Rename the file `whisper-to-input/android/app/build/outputs/apk/debug/app-debug.apk` accordingly.
-6. Create Git tag and release on GitHub.
-
-See [the official document](https://developer.android.com/studio/publish/app-signing#sign_release) for more information.
-
-## License
-
-This repository is licensed under the GPLv3 license. For more information, please refer to the [LICENSE](android/LICENSE) file.
-
-Main Contributors: Yan-Bin Diau ([@tigerpaws01](https://github.com/tigerpaws01)), Johnson Sun ([@j3soon](https://github.com/j3soon)), Ying-Chou Sun ([@ijsun](https://github.com/ijsun))
-
-For a complete list of contributors to the code of this repository, please visit the [contributor list](https://github.com/j3soon/whisper-to-input/graphs/contributors).
+Based on [Whisper To Input by j3soon](https://github.com/j3soon/whisper-to-input). Original main contributors: Yan-Bin Diau ([@tigerpaws01](https://github.com/tigerpaws01)), Johnson Sun ([@j3soon](https://github.com/j3soon)), and Ying-Chou Sun ([@ijsun](https://github.com/ijsun)). See the [upstream contributors](https://github.com/j3soon/whisper-to-input/graphs/contributors) and [fork contributors](https://github.com/jackthelobster/whisper-to-input/graphs/contributors).
