@@ -128,7 +128,6 @@
         android:visibility="invisible"
         app:srcCompat="@drawable/ic_dictation_cancel"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btn_mic_frame"
         app:layout_constraintTop_toTopOf="@id/btn_mic_frame"
         app:layout_constraintBottom_toBottomOf="@id/btn_mic_frame" />
     <com.example.whispertoinput.keyboard.BackspaceButton
