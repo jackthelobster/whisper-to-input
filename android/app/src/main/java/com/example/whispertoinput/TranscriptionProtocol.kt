@@ -3,7 +3,9 @@ package com.example.whispertoinput
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 
@@ -39,9 +41,23 @@ object TranscriptionProtocol {
         if (audio.length() > MAX_AUDIO_BYTES) {
             throw TranscriptionException("The recording exceeds the 25 MiB upload limit. Use a shorter recording.")
         }
-        val type = mediaType.toMediaTypeOrNull()
-            ?: throw TranscriptionException("Unsupported recording media type.")
-        if (type.type != "audio") throw TranscriptionException("Unsupported recording media type.")
+        return buildRequest(settings, audio.asRequestBody(recordingType(mediaType)))
+    }
+
+    fun buildRequest(settings: AppSettings, audio: ByteArray, mediaType: String): Request {
+        validateSettings(settings)
+        if (audio.isEmpty()) throw TranscriptionException("The recording is missing or empty. Record audio and try again.")
+        if (audio.size > MAX_AUDIO_BYTES) {
+            throw TranscriptionException("The recording exceeds the 25 MiB upload limit. Use a shorter recording.")
+        }
+        return buildRequest(settings, audio.toRequestBody(recordingType(mediaType)))
+    }
+
+    private fun recordingType(mediaType: String) = mediaType.toMediaTypeOrNull()?.takeIf { it.type == "audio" }
+        ?: throw TranscriptionException("Unsupported recording media type.")
+
+    private fun buildRequest(settings: AppSettings, audio: RequestBody): Request {
+        val type = audio.contentType()!!
         val uploadName = when (type.subtype) {
             "ogg" -> "audio.ogg"
             "wav", "x-wav" -> "audio.wav"
@@ -50,7 +66,7 @@ object TranscriptionProtocol {
             else -> "audio.m4a"
         }
         val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-            .addFormDataPart("file", uploadName, audio.asRequestBody(type))
+            .addFormDataPart("file", uploadName, audio)
             .addFormDataPart("model", settings.model)
             .addFormDataPart("response_format", "json")
             .apply {

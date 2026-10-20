@@ -92,15 +92,14 @@ While the voice keyboard is visible, automatic checks probe both servers concurr
 | **Endpoint(s) unavailable** | Check the URL, network, authentication, and server. Tap refresh to check again. |
 | **Endpoint probe timeout** | No usable endpoint was found before timeout. Tap refresh to resume checks. |
 
-Checks normally repeat every 30–60 seconds while an endpoint is usable. Unavailable checks retry at roughly 10, 20, and 40 seconds with jitter. Checks stop when the keyboard hides or the input session ends. **Test connection** checks the settings form without saving it. Neither model discovery nor a successful connection check uploads audio or proves transcription will succeed.
+Checks normally repeat every 30–60 seconds while an endpoint is usable. Unavailable checks retry at roughly 10, 20, and 40 seconds with jitter. Checks pause during recording, sending, and while audio is waiting to be resent. They resume after successful insertion or cancellation, and stop when the keyboard hides or the input session ends. **Test connection** checks the settings form without saving it. Neither model discovery nor a successful connection check uploads audio or proves transcription will succeed.
 
 ## Keyboard controls
 
 | Control | What it does |
 | --- | --- |
-| Microphone / Stop | Start recording; stop and send it for transcription. When endpoints are unavailable, the central button refreshes their status. |
-| Cancel | Discard the recording or cancel the active upload. |
-| Retry | Resend retained audio after a failure, while the same input session remains active. |
+| Microphone / Stop / Resend | Start recording; stop and send it for transcription. After a failed send, resend the retained recording. When idle without a recording and endpoints are unavailable, refresh their status. |
+| Cancel (X) | Discard the recording or cancel the active upload, return to idle, and resume endpoint checks. |
 | Back arrow | Return to the previous keyboard; open the picker if Android has no previous keyboard. Leaving cancels unfinished dictation. |
 | Settings | Open the app's configuration screen. |
 | Backspace | Delete the selection or previous Unicode code point; hold to repeat. |
@@ -114,7 +113,7 @@ Audio goes to the endpoint you configure, whose own storage and privacy policies
 
 API keys are encrypted at rest using Android Keystore. Settings are protected by `FLAG_SECURE`, app backup is disabled, and HTTP redirects are refused. Dictation is disabled for password fields and fields that request no personalized learning; protection depends on the receiving app marking its fields correctly.
 
-Recordings stay in private app storage, are limited to two minutes, and uploads are capped at 25 MiB. Successful insertion deletes the recording. Failed audio can remain available for Retry in the current session. Canceling, hiding the keyboard, or changing input sessions cancels work and removes retained audio. The app requires microphone and network access; it does not require notification or shared-storage permissions.
+Recordings use a temporary private app file while the microphone is active and are limited to two minutes. After stopping, audio moves into RAM and the temporary file is deleted; uploads are capped at 25 MiB. Successful insertion releases the audio. Failed audio remains available to resend through the microphone button in the current session. Canceling, hiding the keyboard, or changing input sessions cancels work and removes retained audio. The app requires microphone and network access; it does not require notification or shared-storage permissions.
 
 See the [security review](docs/SECURITY_REVIEW.md) for implementation details and review scope.
 

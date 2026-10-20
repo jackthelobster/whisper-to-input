@@ -145,7 +145,7 @@
     <string name="endpoint_probe_timeout">Endpoint probe timeout</string>
     <string name="endpoint_unavailable_hint">Tap refresh to check both endpoints.</string>
     <string name="settings_fallback_endpoint">Fallback URL</string>
-    <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Checks prefer main and repeat every 30–60 seconds while an endpoint is usable. Failed checks retry after roughly 10, 20 and 40 seconds; a timeout with no usable endpoint requires manual refresh. Leave the URL empty to disable fallback.</string>
+    <string name="settings_fallback_endpoint_desc">Used only when main is unavailable. Checks prefer main and repeat every 30–60 seconds while idle and an endpoint is usable. Checks pause during recording, sending and while a recording is waiting to be resent. Failed checks retry after roughly 10, 20 and 40 seconds; a timeout with no usable endpoint requires manual refresh. Leave the URL empty to disable fallback.</string>
     <string name="settings_fallback_api_key">API key (optional)</string>
     <string name="keyboard_ready_hint">Tap the microphone to dictate</string>
     <string name="keyboard_recording_hint">Tap stop to transcribe</string>
@@ -155,6 +155,7 @@
     <string name="keyboard_error">Could not transcribe</string>
     <string name="stop_speech_to_text">Stop recording and transcribe</string>
     <string name="cancel_dictation">Cancel dictation</string>
+    <string name="keyboard_retry_hint">%1$s Recording kept. Tap the microphone to resend or X to discard.</string>
     <string name="retry_dictation">Retry the current recording</string>
     <string name="open_settings">Open dictation settings</string>
     <string name="enter_key">Enter</string>

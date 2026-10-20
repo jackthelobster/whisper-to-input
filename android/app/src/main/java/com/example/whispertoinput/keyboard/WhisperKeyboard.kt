@@ -29,7 +29,7 @@ import android.widget.TextView
 import com.example.whispertoinput.R
 import kotlin.math.log10
 
-/** View-only dictation controller; audio and retry-file ownership remain in the input service. */
+/** View-only dictation controller; audio and retry ownership remain in the input service. */
 class WhisperKeyboard {
     enum class EndpointStatus {
         Checking, Unavailable, Ready, ReadyFallback, Unverified, UnverifiedFallback;
@@ -62,7 +62,6 @@ class WhisperKeyboard {
     private var buttonShiftEnter: View? = null
     private var onRefreshEndpoints: () -> Unit = {}
     private var buttonCancel: ImageButton? = null
-    private var buttonRetry: ImageButton? = null
     private var buttonSpaceBar: ImageButton? = null
     private var buttonBackspace: BackspaceButton? = null
     private var labelStatus: TextView? = null
@@ -101,7 +100,6 @@ class WhisperKeyboard {
             if (keyboardStatus == KeyboardStatus.Idle) onShiftEnter()
         }
         buttonCancel = view.findViewById(R.id.btn_cancel)
-        buttonRetry = view.findViewById(R.id.btn_retry)
         buttonSpaceBar = view.findViewById(R.id.btn_space_bar)
         buttonBackspace = view.findViewById(R.id.btn_backspace)
         labelStatus = view.findViewById(R.id.label_status)
@@ -110,20 +108,16 @@ class WhisperKeyboard {
         amplitudeRing = view.findViewById(R.id.mic_amplitude_ring)
         buttonMic?.setOnClickListener {
             when (keyboardStatus) {
-                KeyboardStatus.Idle -> if (endpointStatus == EndpointStatus.Unavailable) this.onRefreshEndpoints() else tryStartRecording()
+                KeyboardStatus.Idle -> when {
+                    hasPendingRetry() -> retryTranscription()
+                    endpointStatus == EndpointStatus.Unavailable -> this.onRefreshEndpoints()
+                    else -> tryStartRecording()
+                }
                 KeyboardStatus.Recording -> tryStartTranscribing("")
                 KeyboardStatus.Transcribing -> Unit
             }
         }
         buttonCancel?.setOnClickListener { cancelActiveOperation() }
-        buttonRetry?.setOnClickListener {
-            // Only an error in this session plus a private current file may expose retry.
-            if (!sensitiveInput && keyboardStatus == KeyboardStatus.Idle && errorMessage != null && shouldShowRetry()) {
-                errorMessage = null
-                setKeyboardStatus(KeyboardStatus.Transcribing)
-                this.onStartTranscribing("")
-            }
-        }
         buttonSpaceBar?.setOnClickListener {
             if (keyboardStatus == KeyboardStatus.Recording) tryStartTranscribing(" ")
             else if (keyboardStatus == KeyboardStatus.Idle) onSpaceBar()
@@ -200,7 +194,7 @@ class WhisperKeyboard {
     }
 
     fun tryStartRecording() {
-        if (keyboardView == null || sensitiveInput || keyboardStatus != KeyboardStatus.Idle ||
+        if (keyboardView == null || sensitiveInput || hasPendingRetry() || keyboardStatus != KeyboardStatus.Idle ||
             endpointStatus == EndpointStatus.Unavailable || endpointStatus == EndpointStatus.Checking) return
         errorMessage = null
         setKeyboardStatus(KeyboardStatus.Recording)
@@ -219,14 +213,25 @@ class WhisperKeyboard {
         onStartTranscribing(attachToEnd)
     }
 
+    private fun hasPendingRetry(): Boolean =
+        !sensitiveInput && keyboardStatus == KeyboardStatus.Idle && errorMessage != null && shouldShowRetry()
+
+    private fun retryTranscription() {
+        if (!hasPendingRetry()) return
+        errorMessage = null
+        setKeyboardStatus(KeyboardStatus.Transcribing)
+        onStartTranscribing("")
+    }
+
     private fun cancelActiveOperation() {
+        val pendingRetry = hasPendingRetry()
         val previous = keyboardStatus
         errorMessage = null
         setKeyboardStatus(KeyboardStatus.Idle)
         when (previous) {
             KeyboardStatus.Recording -> onCancelRecording()
             KeyboardStatus.Transcribing -> onCancelTranscribing()
-            KeyboardStatus.Idle -> Unit
+            KeyboardStatus.Idle -> if (pendingRetry) onCancelTranscribing()
         }
     }
 
@@ -241,6 +246,7 @@ class WhisperKeyboard {
         val recording = keyboardStatus == KeyboardStatus.Recording
         val transcribing = keyboardStatus == KeyboardStatus.Transcribing
         val active = recording || transcribing
+        val pendingRetry = hasPendingRetry()
         val status = when {
             sensitiveInput -> R.string.keyboard_sensitive
             recording -> R.string.recording
@@ -252,6 +258,7 @@ class WhisperKeyboard {
             sensitiveInput -> context.getString(R.string.keyboard_sensitive_hint)
             recording -> context.getString(R.string.keyboard_recording_hint)
             transcribing -> context.getString(R.string.keyboard_transcribing_hint)
+            pendingRetry -> context.getString(R.string.keyboard_retry_hint, errorMessage)
             errorMessage != null -> errorMessage
             endpointStatus == EndpointStatus.Unavailable -> endpointDetail
                 ?: context.getString(R.string.endpoint_unavailable_hint)
@@ -262,8 +269,8 @@ class WhisperKeyboard {
         }
         labelStatus?.setText(status)
         labelHint?.text = hint
-        val unavailable = !active && endpointStatus == EndpointStatus.Unavailable
-        val checking = !active && endpointStatus == EndpointStatus.Checking
+        val unavailable = !active && !pendingRetry && endpointStatus == EndpointStatus.Unavailable
+        val checking = !active && !pendingRetry && endpointStatus == EndpointStatus.Checking
         buttonShiftEnter?.apply {
             isEnabled = !active
             alpha = if (active) 0.38f else 1f
@@ -275,12 +282,13 @@ class WhisperKeyboard {
             alpha = if (sensitiveInput) 0.38f else 1f
             setImageResource(when {
                 recording -> R.drawable.ic_dictation_stop
-                unavailable || checking -> R.drawable.ic_dictation_retry
+                pendingRetry || unavailable || checking -> R.drawable.ic_dictation_retry
                 else -> R.drawable.ic_dictation_mic
             })
             imageAlpha = if (transcribing) 0 else 255
             contentDescription = context.getString(when {
                 sensitiveInput -> R.string.keyboard_sensitive
+                pendingRetry -> R.string.retry_dictation
                 unavailable || checking -> R.string.refresh_endpoints
                 recording -> R.string.stop_speech_to_text
                 transcribing -> R.string.transcribing
@@ -288,12 +296,7 @@ class WhisperKeyboard {
             })
         }
         waitingIcon?.visibility = if (transcribing) View.VISIBLE else View.GONE
-        buttonCancel?.visibility = if (active && !sensitiveInput) View.VISIBLE else View.INVISIBLE
-        buttonRetry?.apply {
-            val available = !sensitiveInput && !active && errorMessage != null && shouldShowRetry()
-            visibility = if (available) View.VISIBLE else View.INVISIBLE
-            isEnabled = available
-        }
+        buttonCancel?.visibility = if ((active || pendingRetry) && !sensitiveInput) View.VISIBLE else View.INVISIBLE
         buttonEnter?.apply {
             isEnabled = !transcribing
             alpha = if (transcribing) 0.38f else 1f

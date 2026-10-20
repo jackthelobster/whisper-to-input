@@ -7,10 +7,13 @@ import java.io.File
 
 internal object EditorOperations {
     fun commitTranscription(connection: InputConnection, text: String, audio: File): Boolean {
-        val committed = text.isNotBlank() && runCatching { connection.commitText(text, 1) }.getOrDefault(false)
+        val committed = commitTranscription(connection, text)
         if (committed) audio.delete()
         return committed
     }
+
+    fun commitTranscription(connection: InputConnection, text: String): Boolean =
+        text.isNotBlank() && runCatching { connection.commitText(text, 1) }.getOrDefault(false)
 
     fun shiftEnter(connection: InputConnection) {
         val time = android.os.SystemClock.uptimeMillis()

@@ -42,6 +42,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -93,7 +94,10 @@ class WhisperInputService : InputMethodService() {
         var selectedSettings: AppSettings? = null
         var userInteracted = false
         var endpointProbeTimedOut = false
-        var audio: File? = null
+        var recordingFile: File? = null
+        var audio: ByteArray? = null
+        var dictationActive = false
+        var suffix = ""
         var transcribing = false
     }
 
@@ -137,10 +141,13 @@ class WhisperInputService : InputMethodService() {
             }
             setOnRecordingError {
                 val session = activeSession
-                session?.audio?.delete()
+                session?.recordingFile?.delete()
+                session?.recordingFile = null
                 session?.audio = null
+                session?.dictationActive = false
                 if (session != null && isCurrentTarget(session)) {
                     showError("Recording failed. Please try again.")
+                    startAvailabilityChecks(session)
                 }
             }
         }
@@ -237,6 +244,7 @@ class WhisperInputService : InputMethodService() {
     }
 
     private fun startAvailabilityChecks(session: EditorSession, checkBoth: Boolean = false) {
+        if (session.dictationActive || !isCurrentDictationTarget(session)) return
         settingsJob?.cancel()
         session.endpointProbeTimedOut = false
         // Rechecks run quietly; retain the last result until availability changes.
@@ -244,19 +252,19 @@ class WhisperInputService : InputMethodService() {
         settingsJob = serviceScope.launch {
             val schedule = EndpointPollSchedule()
             var checkAll = checkBoth
-            while (isCurrentDictationTarget(session)) {
+            while (isCurrentDictationTarget(session) && !session.dictationActive) {
                 val started = SystemClock.elapsedRealtime()
                 val settings = try {
                     repository.load()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null }
-                if (!isCurrentDictationTarget(session)) return@launch
+                if (!isCurrentDictationTarget(session) || session.dictationActive) return@launch
                 whisperKeyboard.setShowShiftEnter(settings?.showShiftEnter == true)
                 val result = settings?.let { availability.inspect(it, checkAll) }
                 checkAll = false
                 val selected = result?.selected
-                if (!isCurrentDictationTarget(session)) return@launch
+                if (!isCurrentDictationTarget(session) || session.dictationActive) return@launch
                 session.settings = settings
                 session.selectedSettings = selected
                 session.endpointProbeTimedOut = result?.shouldPausePolling() == true
@@ -273,7 +281,7 @@ class WhisperInputService : InputMethodService() {
                     whisperKeyboard.tryStartRecording()
                 }
                 // Only a timeout with no usable endpoint waits for an explicit refresh.
-                if (session.endpointProbeTimedOut) return@launch
+                if (session.endpointProbeTimedOut || session.dictationActive) return@launch
                 val interval = schedule.nextDelayMillis(selected != null)
                 delay((interval - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(1L))
             }
@@ -301,7 +309,8 @@ class WhisperInputService : InputMethodService() {
         settingsJob = null
         whisperTranscriber.stop()
         recorderManager?.cancel()
-        previous?.audio?.delete()
+        previous?.recordingFile?.delete()
+        previous?.recordingFile = null
         previous?.audio = null
         previous?.transcribing = false
         if (keyboardReady) {
@@ -326,15 +335,24 @@ class WhisperInputService : InputMethodService() {
         whisperTranscriber.stop()
         session.transcribing = false
         recorder.cancel()
-        session.audio?.delete()
-        session.audio = recorder.start()
-        if (session.audio == null) showError("Unable to start the microphone. Please try again.")
+        session.dictationActive = true
+        settingsJob?.cancel()
+        settingsJob = null
+        session.audio = null
+        session.recordingFile?.delete()
+        session.recordingFile = recorder.start()
+        if (session.recordingFile == null) {
+            session.dictationActive = false
+            showError("Unable to start the microphone. Please try again.")
+            startAvailabilityChecks(session)
+        }
     }
 
     private fun onCancelRecording() {
         activeSession?.userInteracted = true
         discardAudio()
         resetKeyboard()
+        activeSession?.let { startAvailabilityChecks(it) }
     }
 
     private fun onStartTranscription(attachToEnd: String) {
@@ -347,67 +365,93 @@ class WhisperInputService : InputMethodService() {
         session.userInteracted = true
         if (session.transcribing) return
         val recorder = recorderManager ?: return
+        session.dictationActive = true
+        settingsJob?.cancel()
+        settingsJob = null
         if (recorder.isRecording) {
-            session.audio = recorder.stop()
-        }
-        val audio = session.audio
-        if (audio == null || !audio.isFile || audio.length() == 0L) {
-            session.audio?.delete()
-            session.audio = null
-            showError("No usable audio was recorded. Please record again.")
-            return
-        }
-        val selected = session.selectedSettings
-        if (selected == null) {
-            showError("No transcription endpoint is available. Retry after the next connection check.")
-            return
+            session.recordingFile = recorder.stop()
+            // Preserve the requested space across retries; Enter never submits the editor.
+            session.suffix = if (attachToEnd == " ") " " else ""
         }
         val request = ++requestGeneration
         session.transcribing = true
-        // Enter while recording means finish dictation, NOT submit a chat/message or insert an
-        // actionable newline. Only an explicitly requested space is attached to transcription.
-        val suffix = if (attachToEnd == " ") " " else ""
-        try {
-            whisperTranscriber.startAsync(
-                selected, audio.absolutePath, AUDIO_MEDIA_TYPE_M4A, suffix,
-                { text ->
-                    serviceScope.launch {
-                        if (!ownsRequest(session, request, audio)) return@launch
-                        // The transcriber emits callback(null) before its error callback; let
-                        // that error path finish the request instead of treating it as empty speech.
-                        if (text == null) return@launch
-                        val committed = EditorOperations.commitTranscription(session.connection, text, audio)
-                        if (committed) {
-                            session.transcribing = false
-                            session.audio = null
-                            resetKeyboard()
-                            if (session.settings?.autoSwitch == true && isCurrentDictationTarget(session)) {
-                                onSwitchIme()
-                            }
-                        } else {
-                            session.transcribing = false
-                            showError("No text was inserted. Please retry or record again.")
+        serviceScope.launch {
+            val file = session.recordingFile
+            if (session.audio == null) {
+                val bytes = try {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            if (file == null || !file.isFile || file.length() !in 1..TranscriptionProtocol.MAX_AUDIO_BYTES) null
+                            else file.readBytes()
+                        } finally {
+                            file?.delete()
                         }
                     }
-                },
-                { message ->
-                    serviceScope.launch {
-                        if (!ownsRequest(session, request, audio)) return@launch
-                        session.transcribing = false
-                        // WhisperTranscriber only emits fixed, sanitized client-side messages.
-                        showError(message)
-                    }
-                },
-            )
-        } catch (_: Exception) {
-            if (ownsRequest(session, request, audio)) {
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                if (!isCurrentDictationTarget(session) || requestGeneration != request || !session.transcribing) return@launch
+                session.recordingFile = null
+                session.audio = bytes
+            }
+            val audio = session.audio
+            if (audio == null || audio.isEmpty()) {
                 session.transcribing = false
-                showError("Transcription failed. Check settings or retry.")
+                session.dictationActive = false
+                showError("No usable audio was recorded. Please record again.")
+                startAvailabilityChecks(session)
+                return@launch
+            }
+            val selected = session.selectedSettings
+            if (selected == null) {
+                session.transcribing = false
+                showError("No transcription endpoint is available. Tap the microphone to retry or X to discard.")
+                return@launch
+            }
+            try {
+                whisperTranscriber.startAsync(
+                    selected, audio, AUDIO_MEDIA_TYPE_M4A, session.suffix,
+                    { text ->
+                        serviceScope.launch result@{
+                            if (!ownsRequest(session, request, audio)) return@result
+                            // The transcriber emits callback(null) before its error callback; let
+                            // that error path finish the request instead of treating it as empty speech.
+                            if (text == null) return@result
+                            val committed = EditorOperations.commitTranscription(session.connection, text)
+                            if (committed) {
+                                session.transcribing = false
+                                session.audio = null
+                                session.dictationActive = false
+                                resetKeyboard()
+                                startAvailabilityChecks(session)
+                                if (session.settings?.autoSwitch == true && isCurrentDictationTarget(session)) {
+                                    onSwitchIme()
+                                }
+                            } else {
+                                session.transcribing = false
+                                showError("No text was inserted. Please retry or record again.")
+                            }
+                        }
+                    },
+                    { message ->
+                        serviceScope.launch result@{
+                            if (!ownsRequest(session, request, audio)) return@result
+                            session.transcribing = false
+                            // WhisperTranscriber only emits fixed, sanitized client-side messages.
+                            showError(message)
+                        }
+                    },
+                )
+            } catch (_: Exception) {
+                if (ownsRequest(session, request, audio)) {
+                    session.transcribing = false
+                    showError("Transcription failed. Check settings or retry.")
+                }
             }
         }
     }
 
-    private fun ownsRequest(session: EditorSession, request: Long, audio: File): Boolean =
+    private fun ownsRequest(session: EditorSession, request: Long, audio: ByteArray): Boolean =
         isCurrentDictationTarget(session) && requestGeneration == request &&
             session.transcribing && session.audio === audio
 
@@ -415,6 +459,7 @@ class WhisperInputService : InputMethodService() {
         activeSession?.userInteracted = true
         discardAudio()
         resetKeyboard()
+        activeSession?.let { startAvailabilityChecks(it) }
     }
 
     private fun discardAudio() {
@@ -422,9 +467,11 @@ class WhisperInputService : InputMethodService() {
         whisperTranscriber.stop()
         recorderManager?.cancel()
         activeSession?.apply {
-            audio?.delete()
+            recordingFile?.delete()
+            recordingFile = null
             audio = null
             transcribing = false
+            dictationActive = false
         }
     }
 
@@ -432,7 +479,7 @@ class WhisperInputService : InputMethodService() {
         val session = activeSession ?: return false
         val audio = session.audio ?: return false
         return isCurrentDictationTarget(session) && !session.transcribing &&
-            recorderManager?.isRecording == false && audio.isFile && audio.length() > 0L
+            recorderManager?.isRecording == false && audio.isNotEmpty()
     }
 
     private fun onDeleteText() {

@@ -129,6 +129,53 @@ class ExampleInstrumentedTest {
         }
     }
 
+    @Test fun mainMicrophoneResendsRetainedAudioAndCancelDiscardsIt() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var recordings = 0
+                var sends = 0
+                var discards = 0
+                var refreshes = 0
+                var retained = false
+                val keyboard = WhisperKeyboard()
+                val view = keyboard.setup(activity.layoutInflater, { recordings++ }, {}, { sends++ },
+                    { discards++; retained = false }, {}, {}, {}, {}, {}, { retained },
+                    onRefreshEndpoints = { refreshes++ })
+                val mic = view.findViewById<View>(R.id.btn_mic)
+                val cancel = view.findViewById<View>(R.id.btn_cancel)
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
+                mic.performClick()
+                assertEquals(1, recordings)
+                mic.performClick()
+                assertEquals(1, sends)
+                retained = true
+                // Retry must beat both unavailable and checking endpoint states.
+                for (status in listOf(EndpointStatus.Unavailable, EndpointStatus.Checking)) {
+                    keyboard.setEndpointStatus(status)
+                    keyboard.showError("Could not reach the transcription server.")
+                    assertTrue(mic.isEnabled)
+                    assertEquals(activity.getString(R.string.retry_dictation), mic.contentDescription)
+                    assertEquals(View.VISIBLE, cancel.visibility)
+                    keyboard.tryStartRecording() // Must never overwrite a pending recording.
+                    assertEquals(1, recordings)
+                    val before = sends
+                    mic.performClick()
+                    assertEquals(before + 1, sends)
+                    assertEquals(0, refreshes)
+                    assertFalse(mic.isEnabled) // Prevent duplicate sends while uploading.
+                }
+                keyboard.showError("Could not reach the transcription server.")
+                cancel.performClick()
+                assertEquals(1, discards)
+                assertFalse(retained)
+                assertEquals(View.INVISIBLE, cancel.visibility)
+                keyboard.setEndpointStatus(EndpointStatus.Ready)
+                mic.performClick()
+                assertEquals(2, recordings)
+            }
+        }
+    }
+
     @Test fun endpointChecksUpdateIdleStatusWithoutInterruptingRecordingOrErrors() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -239,8 +286,11 @@ class ExampleInstrumentedTest {
                     keyboard.tryStartRecording()
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-listening-$label")
                     keyboard.reset()
-                    keyboard.showError("Transcription failed. Tap retry to try again.")
-                    assertEquals(View.VISIBLE, view.findViewById<View>(R.id.btn_retry).visibility)
+                    keyboard.showError("Could not reach the transcription server.")
+                    assertEquals(View.VISIBLE, view.findViewById<View>(R.id.btn_cancel).visibility)
+                    assertEquals(activity.getString(R.string.retry_dictation), view.findViewById<View>(R.id.btn_mic).contentDescription)
+                    view.measure(View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(activity.resources.displayMetrics.heightPixels, View.MeasureSpec.AT_MOST))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
                     capture(view, activity.getExternalFilesDir(null)!!, "keyboard-retry-$label")
                     keyboard.reset()
                 }

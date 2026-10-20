@@ -5,6 +5,7 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import okhttp3.Request
 import okio.Buffer
 import java.io.File
 import java.io.IOException
@@ -23,7 +24,13 @@ class TranscriptionClient internal constructor(
     }
 
     suspend fun transcribe(settings: AppSettings, audio: File, mediaType: String): String {
-        val request = TranscriptionProtocol.buildRequest(settings, audio, mediaType)
+        return transcribe(TranscriptionProtocol.buildRequest(settings, audio, mediaType))
+    }
+
+    suspend fun transcribe(settings: AppSettings, audio: ByteArray, mediaType: String): String =
+        transcribe(TranscriptionProtocol.buildRequest(settings, audio, mediaType))
+
+    private suspend fun transcribe(request: Request): String {
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }

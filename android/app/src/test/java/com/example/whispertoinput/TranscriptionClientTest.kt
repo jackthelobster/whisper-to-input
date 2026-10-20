@@ -66,6 +66,34 @@ class TranscriptionClientTest {
         assertTrue(payload.contains("\r\n\r\nen\r\n"))
     }
 
+    @Test fun timedOutInMemoryRecordingCanBeResentWithoutAFile() = runBlocking {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("{\"text\":\"resent recording\"}"))
+        val client = httpClient().newBuilder().readTimeout(100, TimeUnit.MILLISECONDS)
+            .callTimeout(1000, TimeUnit.MILLISECONDS).build().also { networkClients += it }
+        val transcription = TranscriptionClient(client)
+        val recording = "retained audio bytes".toByteArray()
+        val original = recording.copyOf()
+        try {
+            transcription.transcribe(settings(), recording, "audio/mp4")
+            fail("Expected timeout")
+        } catch (e: TranscriptionException) {
+            assertTrue(e.message!!.contains("timed out"))
+        }
+        assertArrayEquals(original, recording)
+        assertEquals("resent recording", transcription.transcribe(settings(), recording, "audio/mp4"))
+        repeat(2) {
+            val request = server.takeRequest(2, TimeUnit.SECONDS)!!
+            assertEquals("POST", request.method)
+            assertEquals("/v1/audio/transcriptions?tenant=test", request.path)
+            val body = request.body.readUtf8()
+            assertTrue(body.contains("filename=\"audio.m4a\""))
+            assertTrue(body.contains("retained audio bytes"))
+        }
+        assertArrayEquals(original, recording)
+        assertEquals(2, server.requestCount)
+    }
+
     @Test fun plainTextResponseIsAlsoAccepted() = runBlocking {
         server.enqueue(MockResponse().setHeader("Content-Type", "text/plain").setBody(" recognized text \n"))
         assertEquals("recognized text", TranscriptionClient(httpClient()).transcribe(settings(), audio(), "audio/mp4"))

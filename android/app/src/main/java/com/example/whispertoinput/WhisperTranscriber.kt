@@ -29,7 +29,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import kotlin.coroutines.coroutineContext
 
 class WhisperTranscriber {
@@ -41,25 +40,22 @@ class WhisperTranscriber {
 
     fun startAsync(
         settings: AppSettings,
-        filename: String,
+        audio: ByteArray,
         mediaType: String,
         attachToEnd: String,
         callback: (String?) -> Unit,
         exceptionCallback: (String) -> Unit
     ) {
-        val audio = File(filename)
         synchronized(lifecycleLock) {
             if (!supervisor.isActive) return
             currentTranscriptionJob?.cancel()
-            val lease = RecordingLease.acquire(audio)
             val job = scope.launch(start = CoroutineStart.LAZY) {
                 val result = try {
                     withContext(Dispatchers.IO) {
                         val text = client.transcribe(settings, audio, mediaType)
                         coroutineContext.ensureActive()
-                        // HTTP success is not editor insertion success. The service owns deletion
-                        // after commitText succeeds (or the user cancels/leaves the editor), so keep
-                        // this recording available for retry even after this job releases its lease.
+                        // The service retains the bytes until insertion succeeds or the user
+                        // discards/leaves the editor. HTTP success alone must not lose the audio.
                         text + when {
                             attachToEnd.isNotEmpty() -> attachToEnd
                             settings.trailingSpace -> " "
@@ -83,7 +79,6 @@ class WhisperTranscriber {
             }
             currentTranscriptionJob = job
             job.invokeOnCompletion {
-                lease.release()
                 synchronized(lifecycleLock) {
                     if (currentTranscriptionJob === job) currentTranscriptionJob = null
                 }
